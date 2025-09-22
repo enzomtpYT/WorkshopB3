@@ -1,5 +1,5 @@
 import React, {Component} from 'react';
-import {View, StyleSheet, ScrollView, Alert, Modal} from 'react-native';
+import {View, StyleSheet, ScrollView, Alert, Modal, KeyboardAvoidingView, Platform, Keyboard, StatusBar} from 'react-native';
 import {TextInput, Button, Card, Text as PaperText, IconButton, Provider as PaperProvider} from 'react-native-paper';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -192,11 +192,27 @@ const AppContent: React.FC<{
   username: string;
 }> = ({ inputText, onTextChange, onPress, receivedMessages, isListening, onClearMessages, ownIpAddress, onOpenSettings, username }) => {
   const theme = useMaterialYouTheme();
+  const [keyboardVisible, setKeyboardVisible] = React.useState(false);
+
+  React.useEffect(() => {
+    const keyboardDidShowListener = Keyboard.addListener('keyboardDidShow', () => {
+      setKeyboardVisible(true);
+    });
+    const keyboardDidHideListener = Keyboard.addListener('keyboardDidHide', () => {
+      setKeyboardVisible(false);
+    });
+
+    return () => {
+      keyboardDidShowListener.remove();
+      keyboardDidHideListener.remove();
+    };
+  }, []);
 
   const styles = StyleSheet.create({
     container: {
       flex: 1,
-      padding: 20,
+      padding: 0,
+      paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 0,
       backgroundColor: theme.background,
     },
     input: {
@@ -208,10 +224,14 @@ const AppContent: React.FC<{
       alignItems: 'center',
       gap: 10,
       marginBottom: 10,
+      paddingHorizontal: 20,
+      paddingBottom: 10,
     },
     messagesContainer: {
       flex: 1,
-      marginTop: 20,
+      paddingTop: 20,
+      paddingHorizontal: 20,
+      paddingBottom: 0,
     },
     statusContainer: {
       flexDirection: 'row',
@@ -264,7 +284,11 @@ const AppContent: React.FC<{
   });
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingView 
+      style={styles.container}
+      behavior={keyboardVisible ? 'padding' : undefined}
+      keyboardVerticalOffset={keyboardVisible ? (Platform.OS === 'ios' ? 0 : 0) : 0}
+    >
       <View style={styles.messagesContainer}>
         <View style={styles.statusContainer}>
           <View style={styles.statusInfo}>
@@ -349,7 +373,7 @@ const AppContent: React.FC<{
           size={24}
         />
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 };
 
