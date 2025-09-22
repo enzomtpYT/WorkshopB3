@@ -1,6 +1,7 @@
 import React, {Component} from 'react';
-import {View, StyleSheet, ScrollView, Alert} from 'react-native';
-import {TextInput, Button, Card, Text as PaperText} from 'react-native-paper';
+import {View, StyleSheet, ScrollView, Alert, Modal} from 'react-native';
+import {TextInput, Button, Card, Text as PaperText, IconButton} from 'react-native-paper';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import MaterialYou from 'react-native-material-you-colors';
 import type { MaterialYouPalette } from 'react-native-material-you-colors';
@@ -30,20 +31,54 @@ function generateTheme(palette: MaterialYouPalette) {
 
 export const { ThemeProvider, useMaterialYouTheme } = MaterialYou.createThemeContext(generateTheme);
 
-class App extends Component {
+const USERNAME_STORAGE_KEY = 'broadcast_username';
+
+interface AppState {
+  inputText: string;
+  receivedMessages: Array<{message: string, timestamp: string, sender: string}>;
+  isListening: boolean;
+  ownIpAddress: string | null;
+  username: string;
+  showSettings: boolean;
+}
+
+class App extends Component<{}, AppState> {
   state = {
     inputText: '',
     receivedMessages: [] as Array<{message: string, timestamp: string, sender: string}>,
     isListening: false,
+    ownIpAddress: null as string | null,
+    username: '' as string,
+    showSettings: false,
   };
 
   componentDidMount() {
     this.startBroadcastListener();
+    this.loadUsername();
   }
 
   componentWillUnmount() {
     broadcastListener.cleanup();
   }
+
+  loadUsername = async () => {
+    try {
+      const savedUsername = await AsyncStorage.getItem(USERNAME_STORAGE_KEY);
+      if (savedUsername) {
+        this.setState({ username: savedUsername });
+      }
+    } catch (error) {
+      console.error('Failed to load username:', error);
+    }
+  };
+
+  saveUsernameToStorage = async (username: string) => {
+    try {
+      await AsyncStorage.setItem(USERNAME_STORAGE_KEY, username);
+    } catch (error) {
+      console.error('Failed to save username:', error);
+    }
+  };
 
   startBroadcastListener = async () => {
     try {
@@ -59,7 +94,13 @@ class App extends Component {
         }));
       });
       
-      this.setState({ isListening: true });
+      // Get the detected IP address
+      const ownIp = broadcastListener.getDetectedIpAddress();
+      
+      this.setState({ 
+        isListening: true,
+        ownIpAddress: ownIp,
+      });
       console.log('Broadcast listener started successfully');
     } catch (error) {
       console.error('Failed to start broadcast listener:', error);
@@ -76,10 +117,24 @@ class App extends Component {
     this.setState({ receivedMessages: [] });
   };
 
+  toggleSettings = () => {
+    this.setState(prevState => ({ showSettings: !prevState.showSettings }));
+  };
+
+  saveUsername = (newUsername: string) => {
+    this.setState({ username: newUsername });
+    this.saveUsernameToStorage(newUsername);
+  };
+
   onPress = async () => {
     if (this.state.inputText.trim()) {
       try {
-        await broadcastListener.sendBroadcast(this.state.inputText);
+        // Prepend username to message if username is set
+        const messageToSend = this.state.username.trim() 
+          ? `${this.state.username}: ${this.state.inputText}`
+          : this.state.inputText;
+          
+        await broadcastListener.sendBroadcast(messageToSend);
         console.log('Message broadcasted successfully');
       } catch (error) {
         console.error('Failed to broadcast message:', error);
@@ -108,6 +163,15 @@ class App extends Component {
           receivedMessages={this.state.receivedMessages}
           isListening={this.state.isListening}
           onClearMessages={this.clearMessages}
+          ownIpAddress={this.state.ownIpAddress}
+          onOpenSettings={this.toggleSettings}
+          username={this.state.username}
+        />
+        <SettingsModal
+          visible={this.state.showSettings}
+          username={this.state.username}
+          onClose={this.toggleSettings}
+          onSave={this.saveUsername}
         />
       </ThemeProvider>
     );
@@ -121,7 +185,10 @@ const AppContent: React.FC<{
   receivedMessages: Array<{message: string, timestamp: string, sender: string}>;
   isListening: boolean;
   onClearMessages: () => void;
-}> = ({ inputText, onTextChange, onPress, receivedMessages, isListening, onClearMessages }) => {
+  ownIpAddress: string | null;
+  onOpenSettings: () => void;
+  username: string;
+}> = ({ inputText, onTextChange, onPress, receivedMessages, isListening, onClearMessages, ownIpAddress, onOpenSettings, username }) => {
   const theme = useMaterialYouTheme();
 
   const styles = StyleSheet.create({
@@ -141,8 +208,16 @@ const AppContent: React.FC<{
     statusContainer: {
       flexDirection: 'row',
       justifyContent: 'space-between',
-      alignItems: 'center',
+      alignItems: 'flex-start',
       marginBottom: 10,
+    },
+    statusInfo: {
+      flex: 1,
+    },
+    buttonContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
     },
     statusText: {
       color: theme.text,
@@ -169,23 +244,47 @@ const AppContent: React.FC<{
     clearButton: {
       marginTop: 10,
     },
+    ipText: {
+      color: theme.text,
+      fontSize: 12,
+      opacity: 0.7,
+    },
   });
 
   return (
     <View style={styles.container}>
       <View style={styles.messagesContainer}>
         <View style={styles.statusContainer}>
-          <PaperText style={styles.statusText}>
-            Status: {isListening ? 'Listening for broadcasts' : 'Not listening'}
-          </PaperText>
-          <Button 
-            mode="outlined" 
-            onPress={onClearMessages}
-            style={styles.clearButton}
-            disabled={receivedMessages.length === 0}
-          >
-            Clear
-          </Button>
+          <View style={styles.statusInfo}>
+            <PaperText style={styles.statusText}>
+              Status: {isListening ? 'Listening for broadcasts' : 'Not listening'}
+            </PaperText>
+            {ownIpAddress && (
+              <PaperText style={styles.ipText}>
+                Device IP: {ownIpAddress} (messages from this IP are filtered)
+              </PaperText>
+            )}
+            {username && (
+              <PaperText style={styles.ipText}>
+                Username: {username}
+              </PaperText>
+            )}
+          </View>
+          <View style={styles.buttonContainer}>
+            <IconButton
+              icon="cog"
+              size={20}
+              onPress={onOpenSettings}
+              iconColor={theme.primary}
+            />
+            <Button 
+              mode="outlined" 
+              onPress={onClearMessages}
+              disabled={receivedMessages.length === 0}
+            >
+              Clear
+            </Button>
+          </View>
         </View>
         
         <ScrollView>
@@ -223,6 +322,7 @@ const AppContent: React.FC<{
         textColor={theme.text}
         outlineColor={theme.primary}
         activeOutlineColor={theme.primary}
+        placeholder={username ? `${username}: Enter your message...` : 'Enter your message...'}
       />
       <Button 
         mode="contained" 
@@ -234,6 +334,108 @@ const AppContent: React.FC<{
         Broadcast Message
       </Button>
     </View>
+  );
+};
+
+// Settings Modal Component
+const SettingsModal: React.FC<{
+  visible: boolean;
+  username: string;
+  onClose: () => void;
+  onSave: (username: string) => void;
+}> = ({ visible, username, onClose, onSave }) => {
+  const [tempUsername, setTempUsername] = React.useState(username);
+  const theme = useMaterialYouTheme();
+
+  // Update temp username when the modal opens or username changes
+  React.useEffect(() => {
+    setTempUsername(username);
+  }, [username, visible]);
+
+  const handleSave = () => {
+    onSave(tempUsername);
+    onClose();
+  };
+
+  const modalStyles = StyleSheet.create({
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    modalContent: {
+      backgroundColor: theme.background,
+      padding: 20,
+      margin: 20,
+      borderRadius: 10,
+      minWidth: 300,
+    },
+    modalTitle: {
+      fontSize: 20,
+      fontWeight: 'bold',
+      color: theme.text,
+      marginBottom: 20,
+      textAlign: 'center',
+    },
+    input: {
+      marginBottom: 20,
+      backgroundColor: theme.card,
+    },
+    buttonContainer: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      gap: 10,
+    },
+    button: {
+      flex: 1,
+    },
+  });
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <View style={modalStyles.modalOverlay}>
+        <View style={modalStyles.modalContent}>
+          <PaperText style={modalStyles.modalTitle}>Settings</PaperText>
+          
+          <TextInput
+            mode="outlined"
+            label="Username"
+            value={tempUsername}
+            onChangeText={setTempUsername}
+            style={modalStyles.input}
+            textColor={theme.text}
+            outlineColor={theme.primary}
+            activeOutlineColor={theme.primary}
+            placeholder="Enter your username"
+          />
+          
+          <View style={modalStyles.buttonContainer}>
+            <Button 
+              mode="outlined" 
+              onPress={onClose}
+              style={modalStyles.button}
+            >
+              Cancel
+            </Button>
+            <Button 
+              mode="contained" 
+              onPress={handleSave}
+              buttonColor={theme.primary}
+              textColor={theme.textColored}
+              style={modalStyles.button}
+            >
+              Save
+            </Button>
+          </View>
+        </View>
+      </View>
+    </Modal>
   );
 };
 
