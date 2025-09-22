@@ -1,5 +1,6 @@
 import dgram from 'react-native-udp';
 import NetInfo from '@react-native-community/netinfo';
+import DeviceInfo from 'react-native-device-info';
 
 const BROADCAST_PORT = 8081;
 const BROADCAST_ADDR = '255.255.255.255';
@@ -49,7 +50,6 @@ export class BroadcastListener {
       }
 
       try {
-        // Refresh our IP address before starting to listen
         await this.getOwnIpAddress();
         
         this.messageCallback = onMessage;
@@ -60,18 +60,20 @@ export class BroadcastListener {
         });
 
         this.socket.on('message', (msg: any, rinfo: any) => {
-          const message = msg.toString();
+          let message: string;
+          
+          
+          const payload = JSON.parse(msg.toString());
+          message = payload.username.trim() ? `${payload.username}: ${payload.message}` : payload.message;
           const senderIp = rinfo.address;
           
           console.log(`Received broadcast message: ${message} from ${senderIp}:${rinfo.port}`);
           
-          // Check if this message is from ourselves
           if (this.ownIpAddress && senderIp === this.ownIpAddress) {
             console.log('Ignoring message from self');
             return;
           }
           
-          // Additional check: ignore localhost addresses
           if (senderIp === '127.0.0.1' || senderIp === '::1') {
             console.log('Ignoring localhost message');
             return;
@@ -118,11 +120,18 @@ export class BroadcastListener {
     return this.isListening;
   }
 
-  sendBroadcast(message: string): Promise<void> {
+  sendBroadcast(message: string, username: string): Promise<void> {
     return new Promise((resolve, reject) => {
       this.initializeSenderSocket();
-      
-      this.senderSocket.send(message, 0, message.length, BROADCAST_PORT, BROADCAST_ADDR, (err: any) => {
+
+      const payload = {
+        username,
+        message,
+        timestamp: new Date().toISOString(),
+        mac: DeviceInfo.getMacAddress(),
+      };
+
+      this.senderSocket.send(JSON.stringify(payload), 0, JSON.stringify(payload).length, BROADCAST_PORT, BROADCAST_ADDR, (err: any) => {
         if (err) {
           console.error('Error sending broadcast:', err);
           reject(err);
@@ -142,12 +151,10 @@ export class BroadcastListener {
     }
   }
 
-  // Public method to refresh IP address if network changes
   async refreshIpAddress(): Promise<void> {
     await this.getOwnIpAddress();
   }
 
-  // Get current detected IP address
   getDetectedIpAddress(): string | null {
     return this.ownIpAddress;
   }

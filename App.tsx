@@ -126,15 +126,11 @@ class App extends Component<{}, AppState> {
     this.saveUsernameToStorage(newUsername);
   };
 
-  onPress = async () => {
+  sendMsg = async () => {
     if (this.state.inputText.trim()) {
       try {
-        // Prepend username to message if username is set
-        const messageToSend = this.state.username.trim() 
-          ? `${this.state.username}: ${this.state.inputText}`
-          : this.state.inputText;
-          
-        await broadcastListener.sendBroadcast(messageToSend);
+
+        await broadcastListener.sendBroadcast(this.state.inputText.trim(), this.state.username.trim());
         console.log('Message broadcasted successfully');
       } catch (error) {
         console.error('Failed to broadcast message:', error);
@@ -160,7 +156,7 @@ class App extends Component<{}, AppState> {
           <AppContent 
             inputText={this.state.inputText}
             onTextChange={this.onTextChange}
-            onPress={this.onPress}
+            sendMsg={this.sendMsg}
             receivedMessages={this.state.receivedMessages}
             isListening={this.state.isListening}
             onClearMessages={this.clearMessages}
@@ -183,14 +179,14 @@ class App extends Component<{}, AppState> {
 const AppContent: React.FC<{
   inputText: string;
   onTextChange: (text: string) => void;
-  onPress: () => void;
+  sendMsg: () => void;
   receivedMessages: Array<{message: string, timestamp: string, sender: string}>;
   isListening: boolean;
   onClearMessages: () => void;
   ownIpAddress: string | null;
   onOpenSettings: () => void;
   username: string;
-}> = ({ inputText, onTextChange, onPress, receivedMessages, isListening, onClearMessages, ownIpAddress, onOpenSettings, username }) => {
+}> = ({ inputText, onTextChange, sendMsg, receivedMessages, isListening, onClearMessages, ownIpAddress, onOpenSettings, username }) => {
   const theme = useMaterialYouTheme();
   const [keyboardVisible, setKeyboardVisible] = React.useState(false);
 
@@ -366,7 +362,7 @@ const AppContent: React.FC<{
         <IconButton
           icon="send"
           mode="contained"
-          onPress={onPress}
+          onPress={sendMsg}
           iconColor={theme.textColored}
           containerColor={theme.primary}
           disabled={!inputText.trim()}
