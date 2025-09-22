@@ -1,6 +1,6 @@
 import React, {Component} from 'react';
 import {View, StyleSheet, ScrollView, Alert, Modal} from 'react-native';
-import {TextInput, Button, Card, Text as PaperText, IconButton} from 'react-native-paper';
+import {TextInput, Button, Card, Text as PaperText, IconButton, Provider as PaperProvider} from 'react-native-paper';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import MaterialYou from 'react-native-material-you-colors';
@@ -155,25 +155,27 @@ class App extends Component<{}, AppState> {
 
   render() {
     return (
-      <ThemeProvider>
-        <AppContent 
-          inputText={this.state.inputText}
-          onTextChange={this.onTextChange}
-          onPress={this.onPress}
-          receivedMessages={this.state.receivedMessages}
-          isListening={this.state.isListening}
-          onClearMessages={this.clearMessages}
-          ownIpAddress={this.state.ownIpAddress}
-          onOpenSettings={this.toggleSettings}
-          username={this.state.username}
-        />
-        <SettingsModal
-          visible={this.state.showSettings}
-          username={this.state.username}
-          onClose={this.toggleSettings}
-          onSave={this.saveUsername}
-        />
-      </ThemeProvider>
+      <PaperProvider>
+        <ThemeProvider>
+          <AppContent 
+            inputText={this.state.inputText}
+            onTextChange={this.onTextChange}
+            onPress={this.onPress}
+            receivedMessages={this.state.receivedMessages}
+            isListening={this.state.isListening}
+            onClearMessages={this.clearMessages}
+            ownIpAddress={this.state.ownIpAddress}
+            onOpenSettings={this.toggleSettings}
+            username={this.state.username}
+          />
+          <SettingsModal
+            visible={this.state.showSettings}
+            username={this.state.username}
+            onClose={this.toggleSettings}
+            onSave={this.saveUsername}
+          />
+        </ThemeProvider>
+      </PaperProvider>
     );
   }
 }
@@ -198,8 +200,14 @@ const AppContent: React.FC<{
       backgroundColor: theme.background,
     },
     input: {
-      marginBottom: 20,
+      flex: 1,
       backgroundColor: theme.card,
+    },
+    inputContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      marginBottom: 10,
     },
     messagesContainer: {
       flex: 1,
@@ -243,6 +251,10 @@ const AppContent: React.FC<{
     },
     clearButton: {
       marginTop: 10,
+      backgroundColor: theme.card,
+    },
+    clearButtonLabel: {
+      color: theme.text,
     },
     ipText: {
       color: theme.text,
@@ -281,6 +293,8 @@ const AppContent: React.FC<{
               mode="outlined" 
               onPress={onClearMessages}
               disabled={receivedMessages.length === 0}
+              style={styles.clearButton}
+              labelStyle={styles.clearButtonLabel}
             >
               Clear
             </Button>
@@ -313,26 +327,28 @@ const AppContent: React.FC<{
           )}
         </ScrollView>
       </View>
-      <TextInput
-        mode="outlined"
-        label="Message"
-        value={inputText}
-        onChangeText={onTextChange}
-        style={styles.input}
-        textColor={theme.text}
-        outlineColor={theme.primary}
-        activeOutlineColor={theme.primary}
-        placeholder={username ? `${username}: Enter your message...` : 'Enter your message...'}
-      />
-      <Button 
-        mode="contained" 
-        onPress={onPress}
-        buttonColor={theme.primary}
-        textColor={theme.textColored}
-        disabled={!inputText.trim()}
-      >
-        Broadcast Message
-      </Button>
+      <View style={styles.inputContainer}>
+        <TextInput
+          mode="outlined"
+          label="Message"
+          value={inputText}
+          onChangeText={onTextChange}
+          style={styles.input}
+          textColor={theme.text}
+          outlineColor={theme.primary}
+          activeOutlineColor={theme.primary}
+          placeholder={username ? `${username}: Enter your message...` : 'Enter your message...'}
+        />
+        <IconButton
+          icon="send"
+          mode="contained"
+          onPress={onPress}
+          iconColor={theme.textColored}
+          containerColor={theme.primary}
+          disabled={!inputText.trim()}
+          size={24}
+        />
+      </View>
     </View>
   );
 };
@@ -363,13 +379,18 @@ const SettingsModal: React.FC<{
       backgroundColor: 'rgba(0, 0, 0, 0.5)',
       justifyContent: 'center',
       alignItems: 'center',
+      padding: 20,
     },
     modalContent: {
       backgroundColor: theme.background,
       padding: 20,
-      margin: 20,
+      margin: 0,
       borderRadius: 10,
-      minWidth: 300,
+      width: '90%',
+      maxWidth: 420,
+      maxHeight: '80%',
+      // Ensure content can scroll if it grows too tall
+      overflow: 'hidden',
     },
     modalTitle: {
       fontSize: 20,
@@ -390,6 +411,10 @@ const SettingsModal: React.FC<{
     button: {
       flex: 1,
     },
+    // content container style for ScrollView inside modal
+    modalScrollContent: {
+      paddingBottom: 8,
+    },
   });
 
   return (
@@ -401,38 +426,40 @@ const SettingsModal: React.FC<{
     >
       <View style={modalStyles.modalOverlay}>
         <View style={modalStyles.modalContent}>
-          <PaperText style={modalStyles.modalTitle}>Settings</PaperText>
-          
-          <TextInput
-            mode="outlined"
-            label="Username"
-            value={tempUsername}
-            onChangeText={setTempUsername}
-            style={modalStyles.input}
-            textColor={theme.text}
-            outlineColor={theme.primary}
-            activeOutlineColor={theme.primary}
-            placeholder="Enter your username"
-          />
-          
-          <View style={modalStyles.buttonContainer}>
-            <Button 
-              mode="outlined" 
-              onPress={onClose}
-              style={modalStyles.button}
-            >
-              Cancel
-            </Button>
-            <Button 
-              mode="contained" 
-              onPress={handleSave}
-              buttonColor={theme.primary}
-              textColor={theme.textColored}
-              style={modalStyles.button}
-            >
-              Save
-            </Button>
-          </View>
+          <ScrollView contentContainerStyle={modalStyles.modalScrollContent}>
+            <PaperText style={modalStyles.modalTitle}>Settings</PaperText>
+
+            <TextInput
+              mode="outlined"
+              label="Username"
+              value={tempUsername}
+              onChangeText={setTempUsername}
+              style={modalStyles.input}
+              textColor={theme.text}
+              outlineColor={theme.primary}
+              activeOutlineColor={theme.primary}
+              placeholder="Enter your username"
+            />
+
+            <View style={modalStyles.buttonContainer}>
+              <Button 
+                mode="outlined" 
+                onPress={onClose}
+                style={modalStyles.button}
+              >
+                Cancel
+              </Button>
+              <Button 
+                mode="contained" 
+                onPress={handleSave}
+                buttonColor={theme.primary}
+                textColor={theme.textColored}
+                style={modalStyles.button}
+              >
+                Save
+              </Button>
+            </View>
+          </ScrollView>
         </View>
       </View>
     </Modal>
