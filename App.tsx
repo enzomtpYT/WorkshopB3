@@ -27,6 +27,7 @@ import {
   Provider as PaperProvider,
 } from 'react-native-paper';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import MaterialYou from 'react-native-material-you-colors';
 import type { MaterialYouPalette } from 'react-native-material-you-colors';
@@ -256,6 +257,7 @@ const AppContent: React.FC<{
 }) => {
   const theme = useMaterialYouTheme();
   const [keyboardVisible, setKeyboardVisible] = React.useState(false);
+  const insets = useSafeAreaInsets();
 
   React.useEffect(() => {
     const show = Keyboard.addListener('keyboardDidShow', () =>
