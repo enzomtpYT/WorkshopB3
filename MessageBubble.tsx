@@ -49,7 +49,7 @@ const MessageBubble: React.FC<{
           alignSelf: 'flex-start',
         },
         // Card.Content de base
-        content: {},
+        content: { paddingTop: 5, paddingBottom:6},
         // Variante : on ajoute de la place pour l’heure en bas à droite
         contentWithBottomTime: { paddingBottom: 18 },
 
@@ -63,8 +63,8 @@ const MessageBubble: React.FC<{
         bodyRow: { flexDirection: 'row', alignItems: 'flex-end' },
         bodyColumn: { flexDirection: 'column', alignItems: 'flex-start' },
 
-        textSent: { color: theme.textColored, fontSize: 16 },
-        textRecv: { color: theme.text, fontSize: 16 },
+        textSent: { color: theme.textColored, fontSize: 14 },
+        textRecv: { color: theme.text, fontSize: 14 },
 
         infoSent: { color: theme.textColored, fontSize: 11, opacity: 0.75 },
         infoRecv: { color: theme.text, fontSize: 11, opacity: 0.75 },
