@@ -2,6 +2,7 @@ import React, {Component} from 'react';
 import {View, StyleSheet, ScrollView, Alert, Modal, KeyboardAvoidingView, Platform, Keyboard, StatusBar} from 'react-native';
 import {TextInput, Button, Card, Text as PaperText, IconButton, Provider as PaperProvider} from 'react-native-paper';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import MaterialYou from 'react-native-material-you-colors';
 import type { MaterialYouPalette } from 'react-native-material-you-colors';
@@ -164,23 +165,25 @@ class App extends Component<{}, AppState> {
     return (
       <PaperProvider>
         <ThemeProvider>
-          <AppContent 
-            inputText={this.state.inputText}
-            onTextChange={this.onTextChange}
-            sendMsg={this.sendMsg}
-            receivedMessages={this.state.receivedMessages}
-            isListening={this.state.isListening}
-            onClearMessages={this.clearMessages}
-            ownIpAddress={this.state.ownIpAddress}
-            onOpenSettings={this.toggleSettings}
-            username={this.state.username}
-          />
-          <SettingsModal
-            visible={this.state.showSettings}
-            username={this.state.username}
-            onClose={this.toggleSettings}
-            onSave={this.saveUsername}
-          />
+          <SafeAreaProvider>
+            <AppContent 
+              inputText={this.state.inputText}
+              onTextChange={this.onTextChange}
+              sendMsg={this.sendMsg}
+              receivedMessages={this.state.receivedMessages}
+              isListening={this.state.isListening}
+              onClearMessages={this.clearMessages}
+              ownIpAddress={this.state.ownIpAddress}
+              onOpenSettings={this.toggleSettings}
+              username={this.state.username}
+            />
+            <SettingsModal
+              visible={this.state.showSettings}
+              username={this.state.username}
+              onClose={this.toggleSettings}
+              onSave={this.saveUsername}
+            />
+          </SafeAreaProvider>
         </ThemeProvider>
       </PaperProvider>
     );
@@ -200,6 +203,7 @@ const AppContent: React.FC<{
 }> = ({ inputText, onTextChange, sendMsg, receivedMessages, isListening, onClearMessages, ownIpAddress, onOpenSettings, username }) => {
   const theme = useMaterialYouTheme();
   const [keyboardVisible, setKeyboardVisible] = React.useState(false);
+  const insets = useSafeAreaInsets();
 
   React.useEffect(() => {
     const keyboardDidShowListener = Keyboard.addListener('keyboardDidShow', () => {
@@ -322,9 +326,9 @@ const AppContent: React.FC<{
 
   return (
     <KeyboardAvoidingView 
-      style={styles.container}
+      style={[styles.container, { paddingBottom: insets.bottom }]}
       behavior={keyboardVisible ? 'padding' : undefined}
-      keyboardVerticalOffset={keyboardVisible ? (Platform.OS === 'ios' ? 0 : 0) : 0}
+      keyboardVerticalOffset={keyboardVisible ? (Platform.OS === 'ios' ? insets.top : insets.bottom) : 0}
     >
       <View style={styles.messagesContainer}>
         <View style={styles.statusContainer}>
