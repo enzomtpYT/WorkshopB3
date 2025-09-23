@@ -1,6 +1,31 @@
-import React, {Component} from 'react';
-import {View, StyleSheet, ScrollView, Alert, Modal, KeyboardAvoidingView, Platform, Keyboard, StatusBar} from 'react-native';
-import {TextInput, Button, Card, Text as PaperText, IconButton, Provider as PaperProvider} from 'react-native-paper';
+import React, {
+  Component,
+  useEffect,
+  useRef,
+  useState,
+  useCallback,
+} from 'react';
+import {
+  View,
+  StyleSheet,
+  ScrollView,
+  Alert,
+  Modal,
+  KeyboardAvoidingView,
+  Platform,
+  Keyboard,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
+} from 'react-native';
+import { useSafeAreaInsets, SafeAreaProvider } from 'react-native-safe-area-context';
+import {
+  TextInput,
+  Button,
+  Card,
+  Text as PaperText,
+  IconButton,
+  Provider as PaperProvider,
+} from 'react-native-paper';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import MaterialYou from 'react-native-material-you-colors';
@@ -29,13 +54,26 @@ function generateTheme(palette: MaterialYouPalette) {
   return { light, dark };
 }
 
-export const { ThemeProvider, useMaterialYouTheme } = MaterialYou.createThemeContext(generateTheme);
+export const { ThemeProvider, useMaterialYouTheme } =
+  MaterialYou.createThemeContext(generateTheme);
+
+// Helper to format a Date as 24-hour HH:MM
+function formatHHMM(date: Date = new Date()): string {
+  const h = date.getHours().toString().padStart(2, '0');
+  const m = date.getMinutes().toString().padStart(2, '0');
+  return `${h}:${m}`;
+}
 
 const USERNAME_STORAGE_KEY = 'broadcast_username';
 
 interface AppState {
   inputText: string;
-  receivedMessages: Array<{message: string, timestamp: string, sender: string, isSent?: boolean}>;
+  receivedMessages: Array<{
+    message: string;
+    timestamp: string;
+    sender: string;
+    isSent?: boolean;
+  }>;
   isListening: boolean;
   ownIpAddress: string | null;
   username: string;
@@ -45,7 +83,12 @@ interface AppState {
 class App extends Component<{}, AppState> {
   state = {
     inputText: '',
-    receivedMessages: [] as Array<{message: string, timestamp: string, sender: string, isSent?: boolean}>,
+    receivedMessages: [] as Array<{
+      message: string;
+      timestamp: string;
+      sender: string;
+      isSent?: boolean;
+    }>,
     isListening: false,
     ownIpAddress: null as string | null,
     username: '' as string,
@@ -82,22 +125,24 @@ class App extends Component<{}, AppState> {
 
   startBroadcastListener = async () => {
     try {
-      await broadcastListener.startListening((message: string, senderInfo: any) => {
-        const newMessage = {
-          message: message,
-          timestamp: new Date().toLocaleTimeString(),
-          sender: senderInfo.address || 'Unknown',
-        };
-        
-        this.setState((prevState: any) => ({
-          receivedMessages: [...prevState.receivedMessages, newMessage],
-        }));
-      });
-      
+      await broadcastListener.startListening(
+        (message: string, senderInfo: any) => {
+          const newMessage = {
+            message: message,
+            timestamp: formatHHMM(new Date()),
+            sender: senderInfo.address || 'Unknown',
+          };
+
+          this.setState((prevState: any) => ({
+            receivedMessages: [...prevState.receivedMessages, newMessage],
+          }));
+        },
+      );
+
       // Get the detected IP address
       const ownIp = broadcastListener.getDetectedIpAddress();
-      
-      this.setState({ 
+
+      this.setState({
         isListening: true,
         ownIpAddress: ownIp,
       });
@@ -132,23 +177,26 @@ class App extends Component<{}, AppState> {
         // Add sent message to the list first
         const sentMessage = {
           message: this.state.inputText.trim(),
-          timestamp: new Date().toLocaleTimeString(),
+          timestamp: formatHHMM(new Date()),
           sender: 'You',
           isSent: true,
         };
-        
+
         this.setState((prevState: any) => ({
           receivedMessages: [...prevState.receivedMessages, sentMessage],
         }));
 
-        await broadcastListener.sendBroadcast(this.state.inputText.trim(), this.state.username.trim());
+        await broadcastListener.sendBroadcast(
+          this.state.inputText.trim(),
+          this.state.username.trim(),
+        );
         console.log('Message broadcasted successfully');
       } catch (error) {
         console.error('Failed to broadcast message:', error);
         Alert.alert('Error', 'Failed to send broadcast message');
       }
     }
-    
+
     this.setState({
       inputText: '',
     });
@@ -162,27 +210,29 @@ class App extends Component<{}, AppState> {
 
   render() {
     return (
-      <PaperProvider>
-        <ThemeProvider>
-          <AppContent 
-            inputText={this.state.inputText}
-            onTextChange={this.onTextChange}
-            sendMsg={this.sendMsg}
-            receivedMessages={this.state.receivedMessages}
-            isListening={this.state.isListening}
-            onClearMessages={this.clearMessages}
-            ownIpAddress={this.state.ownIpAddress}
-            onOpenSettings={this.toggleSettings}
-            username={this.state.username}
-          />
-          <SettingsModal
-            visible={this.state.showSettings}
-            username={this.state.username}
-            onClose={this.toggleSettings}
-            onSave={this.saveUsername}
-          />
-        </ThemeProvider>
-      </PaperProvider>
+      <SafeAreaProvider>
+        <PaperProvider>
+          <ThemeProvider>
+            <AppContent
+              inputText={this.state.inputText}
+              onTextChange={this.onTextChange}
+              sendMsg={this.sendMsg}
+              receivedMessages={this.state.receivedMessages}
+              isListening={this.state.isListening}
+              onClearMessages={this.clearMessages}
+              ownIpAddress={this.state.ownIpAddress}
+              onOpenSettings={this.toggleSettings}
+              username={this.state.username}
+            />
+            <SettingsModal
+              visible={this.state.showSettings}
+              username={this.state.username}
+              onClose={this.toggleSettings}
+              onSave={this.saveUsername}
+            />
+          </ThemeProvider>
+        </PaperProvider>
+      </SafeAreaProvider>
     );
   }
 }
@@ -191,41 +241,53 @@ const AppContent: React.FC<{
   inputText: string;
   onTextChange: (text: string) => void;
   sendMsg: () => void;
-  receivedMessages: Array<{message: string, timestamp: string, sender: string, isSent?: boolean}>;
+  receivedMessages: Array<{
+    message: string;
+    timestamp: string;
+    sender: string;
+    isSent?: boolean;
+  }>;
   isListening: boolean;
   onClearMessages: () => void;
   ownIpAddress: string | null;
   onOpenSettings: () => void;
   username: string;
-}> = ({ inputText, onTextChange, sendMsg, receivedMessages, isListening, onClearMessages, ownIpAddress, onOpenSettings, username }) => {
+}> = ({
+  inputText,
+  onTextChange,
+  sendMsg,
+  receivedMessages,
+  isListening,
+  onClearMessages,
+  ownIpAddress,
+  onOpenSettings,
+  username,
+}) => {
   const theme = useMaterialYouTheme();
   const [keyboardVisible, setKeyboardVisible] = React.useState(false);
+  const insets = useSafeAreaInsets();
 
   React.useEffect(() => {
-    const keyboardDidShowListener = Keyboard.addListener('keyboardDidShow', () => {
-      setKeyboardVisible(true);
-    });
-    const keyboardDidHideListener = Keyboard.addListener('keyboardDidHide', () => {
-      setKeyboardVisible(false);
-    });
-
+    const show = Keyboard.addListener('keyboardDidShow', () =>
+      setKeyboardVisible(true),
+    );
+    const hide = Keyboard.addListener('keyboardDidHide', () =>
+      setKeyboardVisible(false),
+    );
     return () => {
-      keyboardDidShowListener.remove();
-      keyboardDidHideListener.remove();
+      show.remove();
+      hide.remove();
     };
   }, []);
 
   const styles = StyleSheet.create({
     container: {
       flex: 1,
-      padding: 0,
-      paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 0,
+      paddingTop: insets.top,
+      paddingBottom: keyboardVisible ? 0 : insets.bottom,
       backgroundColor: theme.background,
     },
-    input: {
-      flex: 1,
-      backgroundColor: theme.card,
-    },
+    input: { flex: 1, backgroundColor: theme.card },
     inputContainer: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -246,103 +308,112 @@ const AppContent: React.FC<{
       alignItems: 'flex-start',
       marginBottom: 10,
     },
-    statusInfo: {
-      flex: 1,
-    },
-    buttonContainer: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 8,
-    },
-    statusText: {
-      color: theme.text,
-      fontSize: 14,
-    },
+    statusInfo: { flex: 1 },
+    buttonContainer: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    statusText: { color: theme.text, fontSize: 14 },
     messageCard: {
       marginBottom: 8,
       backgroundColor: theme.card,
       maxWidth: '80%',
+      borderRadius: 16,
     },
     sentMessageCard: {
       alignSelf: 'flex-end',
       backgroundColor: theme.primary,
       maxWidth: '80%',
+      borderRadius: 16,
     },
     receivedMessageCard: {
       alignSelf: 'flex-start',
       backgroundColor: theme.card,
       maxWidth: '80%',
+      borderRadius: 16,
     },
-    messageContainer: {
-      flexDirection: 'row',
-      marginBottom: 8,
+    messageCardContent: {
+      paddingHorizontal: 8,
+      paddingVertical: 6,
     },
-    sentMessageContainer: {
-      justifyContent: 'flex-end',
-    },
-    receivedMessageContainer: {
-      justifyContent: 'flex-start',
-    },
+    messageContainer: { flexDirection: 'row', marginBottom: 8 },
+    sentMessageContainer: { justifyContent: 'flex-end' },
+    receivedMessageContainer: { justifyContent: 'flex-start' },
     messageHeader: {
       flexDirection: 'row',
       justifyContent: 'space-between',
       marginBottom: 4,
     },
-    messageText: {
-      color: theme.text,
-      fontSize: 16,
+    messageText: { color: theme.text, fontSize: 16 },
+    sentMessageText: { color: theme.textColored, fontSize: 16 },
+    messageInfo: { color: theme.text, fontSize: 12, opacity: 0.7 },
+    sentMessageInfo: { color: theme.textColored, fontSize: 12, opacity: 0.8 },
+    // Footer that holds the timestamp aligned to the bottom-right of the bubble
+    messageFooter: {
+      flexDirection: 'row',
+      justifyContent: 'flex-end',
+      marginTop: 2,
     },
-    sentMessageText: {
-      color: theme.textColored,
-      fontSize: 16,
-    },
-    messageInfo: {
-      color: theme.text,
-      fontSize: 12,
-      opacity: 0.7,
-    },
-    sentMessageInfo: {
-      color: theme.textColored,
-      fontSize: 12,
-      opacity: 0.8,
-    },
-    clearButton: {
-      marginTop: 10,
-      backgroundColor: theme.card,
-    },
-    clearButtonLabel: {
-      color: theme.text,
-    },
-    ipText: {
-      color: theme.text,
-      fontSize: 12,
-      opacity: 0.7,
-    },
+    timestampText: { color: theme.text, fontSize: 10, opacity: 0.65 },
+    sentTimestampText: { color: theme.textColored, fontSize: 10, opacity: 0.75 },
+    clearButton: { marginTop: 10, backgroundColor: theme.card },
+    clearButtonLabel: { color: theme.text },
+    ipText: { color: theme.text, fontSize: 12, opacity: 0.7 },
   });
 
+  // ------- Auto-scroll + suivi clavier -------
+  const scrollViewRef = useRef<ScrollView | null>(null);
+  const [autoScroll, setAutoScroll] = useState(true);
+
+  // Auto-scroll à chaque changement de liste (envoi/réception)
+  useEffect(() => {
+    if (autoScroll) {
+      requestAnimationFrame(() => {
+        scrollViewRef.current?.scrollToEnd({ animated: true });
+      });
+    }
+  }, [receivedMessages, autoScroll]);
+
+  // Rester en bas si le contenu s’allonge (images, latence…)
+  const handleContentSizeChange = useCallback(() => {
+    if (autoScroll) {
+      scrollViewRef.current?.scrollToEnd({ animated: true });
+    }
+  }, [autoScroll]);
+
+  // Désactiver l’auto-scroll si l’utilisateur lit plus haut
+  const handleScroll = useCallback(
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const { layoutMeasurement, contentOffset, contentSize } = e.nativeEvent;
+      const paddingToBottom = 24;
+      const isBottom =
+        layoutMeasurement.height + contentOffset.y >=
+        contentSize.height - paddingToBottom;
+      setAutoScroll(isBottom);
+    },
+    [],
+  );
+
   return (
-    <KeyboardAvoidingView 
+    <KeyboardAvoidingView
       style={styles.container}
-      behavior={keyboardVisible ? 'padding' : undefined}
-      keyboardVerticalOffset={keyboardVisible ? (Platform.OS === 'ios' ? 0 : 0) : 0}
+      behavior={keyboardVisible ? (Platform.OS === 'ios' ? 'padding' : 'height') : undefined}
+      keyboardVerticalOffset={0}
     >
       <View style={styles.messagesContainer}>
         <View style={styles.statusContainer}>
           <View style={styles.statusInfo}>
             <PaperText style={styles.statusText}>
-              Status: {isListening ? 'Listening for broadcasts' : 'Not listening'}
+              Status:{' '}
+              {isListening ? 'Listening for broadcasts' : 'Not listening'}
             </PaperText>
             {ownIpAddress && (
               <PaperText style={styles.ipText}>
                 Device IP: {ownIpAddress} (messages from this IP are filtered)
               </PaperText>
             )}
-            {username && (
-              <PaperText style={styles.ipText}>
-                Username: {username}
-              </PaperText>
-            )}
+            {username ? (
+              <PaperText style={styles.ipText}>Username: {username}</PaperText>
+            ) : null}
           </View>
+
           <View style={styles.buttonContainer}>
             <IconButton
               icon="cog"
@@ -350,8 +421,8 @@ const AppContent: React.FC<{
               onPress={onOpenSettings}
               iconColor={theme.primary}
             />
-            <Button 
-              mode="outlined" 
+            <Button
+              mode="outlined"
               onPress={onClearMessages}
               disabled={receivedMessages.length === 0}
               style={styles.clearButton}
@@ -361,41 +432,62 @@ const AppContent: React.FC<{
             </Button>
           </View>
         </View>
-        
-        <ScrollView>
+
+        <ScrollView
+          ref={scrollViewRef}
+          onContentSizeChange={handleContentSizeChange}
+          onScroll={handleScroll}
+          scrollEventThrottle={16}
+          keyboardShouldPersistTaps="handled"
+        >
           {receivedMessages.length === 0 ? (
             <PaperText style={styles.statusText}>
               No broadcast messages received yet...
             </PaperText>
           ) : (
             receivedMessages.map((msg, index) => (
-              <View 
-                key={index} 
+              <View
+                key={index}
                 style={[
                   styles.messageContainer,
-                  msg.isSent ? styles.sentMessageContainer : styles.receivedMessageContainer
+                  msg.isSent
+                    ? styles.sentMessageContainer
+                    : styles.receivedMessageContainer,
                 ]}
               >
-                <Card 
+                <Card
                   style={[
                     styles.messageCard,
-                    msg.isSent ? styles.sentMessageCard : styles.receivedMessageCard
+                    msg.isSent
+                      ? styles.sentMessageCard
+                      : styles.receivedMessageCard,
                   ]}
                 >
-                  <Card.Content>
+                  <Card.Content style={styles.messageCardContent}>
                     <View style={styles.messageHeader}>
                       {!msg.isSent && (
                         <PaperText style={styles.messageInfo}>
                           From: {msg.sender}
                         </PaperText>
                       )}
-                      <PaperText style={msg.isSent ? styles.sentMessageInfo : styles.messageInfo}>
+                    </View>
+                    <PaperText
+                      style={
+                        msg.isSent ? styles.sentMessageText : styles.messageText
+                      }
+                    >
+                      {msg.message}
+                    </PaperText>
+
+                    <View style={styles.messageFooter}>
+                      <PaperText
+                        style={
+                          msg.isSent ? styles.sentTimestampText : styles.timestampText
+                        }
+                      >
                         {msg.timestamp}
                       </PaperText>
                     </View>
-                    <PaperText style={msg.isSent ? styles.sentMessageText : styles.messageText}>
-                      {msg.message}
-                    </PaperText>
                   </Card.Content>
                 </Card>
               </View>
@@ -403,6 +495,7 @@ const AppContent: React.FC<{
           )}
         </ScrollView>
       </View>
+
       <View style={styles.inputContainer}>
         <TextInput
           mode="outlined"
@@ -413,11 +506,22 @@ const AppContent: React.FC<{
           textColor={theme.text}
           outlineColor={theme.primary}
           activeOutlineColor={theme.primary}
-          placeholder={username ? `${username}: Enter your message...` : 'Enter your message...'}
+          placeholder={
+            username
+              ? `${username}: Enter your message...`
+              : 'Enter your message...'
+          }
+          onFocus={() => {
+            // si l’utilisateur était en bas, on reste en bas quand le clavier s’ouvre
+            if (autoScroll) {
+              requestAnimationFrame(() =>
+                scrollViewRef.current?.scrollToEnd({ animated: true }),
+              );
+            }
+          }}
         />
         <IconButton
           icon="send"
-          mode="contained"
           onPress={sendMsg}
           iconColor={theme.textColored}
           containerColor={theme.primary}
@@ -518,15 +622,15 @@ const SettingsModal: React.FC<{
             />
 
             <View style={modalStyles.buttonContainer}>
-              <Button 
-                mode="outlined" 
+              <Button
+                mode="outlined"
                 onPress={onClose}
                 style={modalStyles.button}
               >
                 Cancel
               </Button>
-              <Button 
-                mode="contained" 
+              <Button
+                mode="contained"
                 onPress={handleSave}
                 buttonColor={theme.primary}
                 textColor={theme.textColored}
