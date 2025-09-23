@@ -18,6 +18,7 @@ import {
   NativeScrollEvent,
   NativeSyntheticEvent,
 } from 'react-native';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   TextInput,
   Button,
@@ -204,7 +205,8 @@ class App extends Component<{}, AppState> {
   render() {
     return (
       <PaperProvider>
-        <ThemeProvider>
+        <SafeAreaProvider>
+          <ThemeProvider>
           <AppContent
             inputText={this.state.inputText}
             onTextChange={this.onTextChange}
@@ -222,7 +224,8 @@ class App extends Component<{}, AppState> {
             onClose={this.toggleSettings}
             onSave={this.saveUsername}
           />
-        </ThemeProvider>
+          </ThemeProvider>
+        </SafeAreaProvider>
       </PaperProvider>
     );
   }
@@ -255,6 +258,7 @@ const AppContent: React.FC<{
   username,
 }) => {
   const theme = useMaterialYouTheme();
+  const insets = useSafeAreaInsets();
   const [keyboardVisible, setKeyboardVisible] = React.useState(false);
 
   React.useEffect(() => {
@@ -273,7 +277,10 @@ const AppContent: React.FC<{
   const styles = StyleSheet.create({
     container: {
       flex: 1,
-      paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight || 24 : 0,
+      // Respect the OS safe area (status bar and navigation bar)
+      paddingTop:
+        insets.top || (Platform.OS === 'android' ? StatusBar.currentHeight || 24 : 0),
+      paddingBottom: insets.bottom,
       backgroundColor: theme.background,
     },
     input: { flex: 1, backgroundColor: theme.card },
@@ -283,7 +290,8 @@ const AppContent: React.FC<{
       gap: 10,
       marginBottom: 10,
       paddingHorizontal: 20,
-      paddingBottom: 10,
+      // ensure the input area sits above the navigation bar
+      paddingBottom: 10 + insets.bottom,
     },
     messagesContainer: {
       flex: 1,
@@ -369,7 +377,7 @@ const AppContent: React.FC<{
     <KeyboardAvoidingView
       style={styles.container}
       behavior={keyboardVisible ? (Platform.OS === 'ios' ? 'padding' : 'height') : undefined}
-      keyboardVerticalOffset={Platform.select({ ios: 64, android: 0 })}
+      keyboardVerticalOffset={Platform.select({ ios: 64 + insets.top, android: 0 })}
     >
       <View style={styles.messagesContainer}>
         <View style={styles.statusContainer}>
@@ -515,6 +523,7 @@ const SettingsModal: React.FC<{
 }> = ({ visible, username, onClose, onSave }) => {
   const [tempUsername, setTempUsername] = React.useState(username);
   const theme = useMaterialYouTheme();
+  const insets = useSafeAreaInsets();
 
   // Update temp username when the modal opens or username changes
   React.useEffect(() => {
@@ -544,6 +553,8 @@ const SettingsModal: React.FC<{
       maxHeight: '80%',
       // Ensure content can scroll if it grows too tall
       overflow: 'hidden',
+      // leave room for bottom navigation bar when modal is shown
+      paddingBottom: 20 + insets.bottom,
     },
     modalTitle: {
       fontSize: 20,
