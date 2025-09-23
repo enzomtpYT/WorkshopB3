@@ -57,6 +57,13 @@ function generateTheme(palette: MaterialYouPalette) {
 export const { ThemeProvider, useMaterialYouTheme } =
   MaterialYou.createThemeContext(generateTheme);
 
+// Helper to format a Date as 24-hour HH:MM
+function formatHHMM(date: Date = new Date()): string {
+  const h = date.getHours().toString().padStart(2, '0');
+  const m = date.getMinutes().toString().padStart(2, '0');
+  return `${h}:${m}`;
+}
+
 const USERNAME_STORAGE_KEY = 'broadcast_username';
 
 interface AppState {
@@ -122,7 +129,7 @@ class App extends Component<{}, AppState> {
         (message: string, senderInfo: any) => {
           const newMessage = {
             message: message,
-            timestamp: new Date().toLocaleTimeString(),
+            timestamp: formatHHMM(new Date()),
             sender: senderInfo.address || 'Unknown',
           };
 
@@ -170,7 +177,7 @@ class App extends Component<{}, AppState> {
         // Add sent message to the list first
         const sentMessage = {
           message: this.state.inputText.trim(),
-          timestamp: new Date().toLocaleTimeString(),
+          timestamp: formatHHMM(new Date()),
           sender: 'You',
           isSent: true,
         };
@@ -308,16 +315,23 @@ const AppContent: React.FC<{
       marginBottom: 8,
       backgroundColor: theme.card,
       maxWidth: '80%',
+      borderRadius: 16,
     },
     sentMessageCard: {
       alignSelf: 'flex-end',
       backgroundColor: theme.primary,
       maxWidth: '80%',
+      borderRadius: 16,
     },
     receivedMessageCard: {
       alignSelf: 'flex-start',
       backgroundColor: theme.card,
       maxWidth: '80%',
+      borderRadius: 16,
+    },
+    messageCardContent: {
+      paddingHorizontal: 8,
+      paddingVertical: 6,
     },
     messageContainer: { flexDirection: 'row', marginBottom: 8 },
     sentMessageContainer: { justifyContent: 'flex-end' },
@@ -331,6 +345,14 @@ const AppContent: React.FC<{
     sentMessageText: { color: theme.textColored, fontSize: 16 },
     messageInfo: { color: theme.text, fontSize: 12, opacity: 0.7 },
     sentMessageInfo: { color: theme.textColored, fontSize: 12, opacity: 0.8 },
+    // Footer that holds the timestamp aligned to the bottom-right of the bubble
+    messageFooter: {
+      flexDirection: 'row',
+      justifyContent: 'flex-end',
+      marginTop: 2,
+    },
+    timestampText: { color: theme.text, fontSize: 10, opacity: 0.65 },
+    sentTimestampText: { color: theme.textColored, fontSize: 10, opacity: 0.75 },
     clearButton: { marginTop: 10, backgroundColor: theme.card },
     clearButtonLabel: { color: theme.text },
     ipText: { color: theme.text, fontSize: 12, opacity: 0.7 },
@@ -441,22 +463,13 @@ const AppContent: React.FC<{
                       : styles.receivedMessageCard,
                   ]}
                 >
-                  <Card.Content>
+                  <Card.Content style={styles.messageCardContent}>
                     <View style={styles.messageHeader}>
                       {!msg.isSent && (
                         <PaperText style={styles.messageInfo}>
                           From: {msg.sender}
                         </PaperText>
                       )}
-                      <PaperText
-                        style={
-                          msg.isSent
-                            ? styles.sentMessageInfo
-                            : styles.messageInfo
-                        }
-                      >
-                        {msg.timestamp}
-                      </PaperText>
                     </View>
                     <PaperText
                       style={
@@ -465,6 +478,16 @@ const AppContent: React.FC<{
                     >
                       {msg.message}
                     </PaperText>
+
+                    <View style={styles.messageFooter}>
+                      <PaperText
+                        style={
+                          msg.isSent ? styles.sentTimestampText : styles.timestampText
+                        }
+                      >
+                        {msg.timestamp}
+                      </PaperText>
+                    </View>
                   </Card.Content>
                 </Card>
               </View>
