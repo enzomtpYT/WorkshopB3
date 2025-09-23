@@ -32,6 +32,11 @@ import MaterialYou from 'react-native-material-you-colors';
 import type { MaterialYouPalette } from 'react-native-material-you-colors';
 import { broadcastListener } from './BroadcastListener';
 
+// Import Realm services
+import { databaseManager } from './src/database';
+import { messageService, MessageData } from './src/services/MessageService';
+import { Message } from './src/database/models/Message';
+
 function generateTheme(palette: MaterialYouPalette) {
   const light = {
     isDark: false,
@@ -57,52 +62,73 @@ function generateTheme(palette: MaterialYouPalette) {
 export const { ThemeProvider, useMaterialYouTheme } =
   MaterialYou.createThemeContext(generateTheme);
 
-// Helper to format a Date as 24-hour HH:MM
-function formatHHMM(date: Date = new Date()): string {
-  const h = date.getHours().toString().padStart(2, '0');
-  const m = date.getMinutes().toString().padStart(2, '0');
-  return `${h}:${m}`;
-}
-
 const USERNAME_STORAGE_KEY = 'broadcast_username';
 
 interface AppState {
   inputText: string;
-  receivedMessages: Array<{
-    message: string;
-    timestamp: string;
-    sender: string;
-    isSent?: boolean;
-  }>;
+  receivedMessages: Message[]; // Utiliser le type Message de Realm
   isListening: boolean;
   ownIpAddress: string | null;
   username: string;
   showSettings: boolean;
+  isRealmInitialized: boolean; // Ajouter l'état d'initialisation de Realm
 }
 
 class App extends Component<{}, AppState> {
   state = {
     inputText: '',
-    receivedMessages: [] as Array<{
-      message: string;
-      timestamp: string;
-      sender: string;
-      isSent?: boolean;
-    }>,
+    receivedMessages: [] as Message[],
     isListening: false,
     ownIpAddress: null as string | null,
     username: '' as string,
     showSettings: false,
+    isRealmInitialized: false,
   };
 
-  componentDidMount() {
+  async componentDidMount() {
+    await this.initializeRealm();
     this.startBroadcastListener();
     this.loadUsername();
+    this.loadMessages(); // Charger les messages depuis Realm
   }
 
   componentWillUnmount() {
     broadcastListener.cleanup();
+    databaseManager.close(); // Fermer Realm proprement
   }
+
+  // Initialiser Realm
+  initializeRealm = async () => {
+    try {
+      await databaseManager.initialize();
+      this.setState({ isRealmInitialized: true });
+      console.log('Realm initialized successfully');
+    } catch (error) {
+      console.error('Failed to initialize Realm:', error);
+      Alert.alert('Database Error', 'Failed to initialize local database');
+    }
+  };
+
+  // Charger les messages depuis Realm
+  loadMessages = () => {
+    if (!this.state.isRealmInitialized) return;
+
+    try {
+      const messages = messageService.getAllMessages();
+      const messageArray = Array.from(messages).map(msg => ({
+        _id: msg._id.toString(),
+        message: msg.message,
+        timestamp: this.formatHHMM(msg.timestamp),
+        sender: msg.sender,
+        isSent: msg.isSent,
+        senderIp: msg.senderIp,
+      }));
+
+      this.setState({ receivedMessages: messageArray });
+    } catch (error) {
+      console.error('Failed to load messages:', error);
+    }
+  };
 
   loadUsername = async () => {
     try {
@@ -127,15 +153,23 @@ class App extends Component<{}, AppState> {
     try {
       await broadcastListener.startListening(
         (message: string, senderInfo: any) => {
-          const newMessage = {
+          const messageData: MessageData = {
             message: message,
-            timestamp: formatHHMM(new Date()),
+            timestamp: new Date(),
             sender: senderInfo.address || 'Unknown',
+            isSent: false,
+            senderIp: senderInfo.address,
           };
 
-          this.setState((prevState: any) => ({
-            receivedMessages: [...prevState.receivedMessages, newMessage],
-          }));
+          // Sauvegarder dans Realm
+          if (this.state.isRealmInitialized) {
+            try {
+              messageService.saveMessage(messageData);
+              this.loadMessages(); // Recharger les messages
+            } catch (error) {
+              console.error('Failed to save received message:', error);
+            }
+          }
         },
       );
 
@@ -159,7 +193,16 @@ class App extends Component<{}, AppState> {
   };
 
   clearMessages = () => {
-    this.setState({ receivedMessages: [] });
+    if (!this.state.isRealmInitialized) return;
+
+    try {
+      messageService.clearAllMessages();
+      this.setState({ receivedMessages: [] });
+      console.log('All messages cleared from database');
+    } catch (error) {
+      console.error('Failed to clear messages:', error);
+      Alert.alert('Error', 'Failed to clear messages from database');
+    }
   };
 
   toggleSettings = () => {
@@ -172,25 +215,24 @@ class App extends Component<{}, AppState> {
   };
 
   sendMsg = async () => {
-    if (this.state.inputText.trim()) {
+    if (this.state.inputText.trim() && this.state.isRealmInitialized) {
       try {
-        // Add sent message to the list first
-        const sentMessage = {
+        const messageData: MessageData = {
           message: this.state.inputText.trim(),
-          timestamp: formatHHMM(new Date()),
+          timestamp: new Date(),
           sender: 'You',
           isSent: true,
         };
 
-        this.setState((prevState: any) => ({
-          receivedMessages: [...prevState.receivedMessages, sentMessage],
-        }));
+        // Sauvegarder dans Realm
+        messageService.saveMessage(messageData);
+        this.loadMessages(); // Recharger les messages
 
         await broadcastListener.sendBroadcast(
           this.state.inputText.trim(),
           this.state.username.trim(),
         );
-        console.log('Message broadcasted successfully');
+        console.log('Message broadcasted and saved successfully');
       } catch (error) {
         console.error('Failed to broadcast message:', error);
         Alert.alert('Error', 'Failed to send broadcast message');
@@ -206,6 +248,13 @@ class App extends Component<{}, AppState> {
     this.setState({
       inputText: text,
     });
+  };
+
+  // Helper function pour formater la date
+  formatHHMM = (date: Date = new Date()): string => {
+    const h = date.getHours().toString().padStart(2, '0');
+    const m = date.getMinutes().toString().padStart(2, '0');
+    return `${h}:${m}`;
   };
 
   render() {
@@ -241,12 +290,7 @@ const AppContent: React.FC<{
   inputText: string;
   onTextChange: (text: string) => void;
   sendMsg: () => void;
-  receivedMessages: Array<{
-    message: string;
-    timestamp: string;
-    sender: string;
-    isSent?: boolean;
-  }>;
+  receivedMessages: Message[];
   isListening: boolean;
   onClearMessages: () => void;
   ownIpAddress: string | null;
@@ -445,9 +489,9 @@ const AppContent: React.FC<{
               No broadcast messages received yet...
             </PaperText>
           ) : (
-            receivedMessages.map((msg, index) => (
+            receivedMessages.map((msg) => (
               <View
-                key={index}
+                key={msg._id}
                 style={[
                   styles.messageContainer,
                   msg.isSent
