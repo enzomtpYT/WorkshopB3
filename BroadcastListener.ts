@@ -62,9 +62,36 @@ export class BroadcastListener {
         this.socket.on('message', (msg: any, rinfo: any) => {
           let message: string;
           
+          try {
+            // Convert buffer to string with proper UTF-8 encoding
+            const msgString = msg.toString('utf8');
+            
+            // Validate that the message is complete JSON
+            if (!msgString.trim()) {
+              console.warn('Received empty message, ignoring');
+              return;
+            }
+            
+            if (!msgString.startsWith('{') || !msgString.endsWith('}')) {
+              console.warn('Received malformed JSON message, ignoring:', msgString);
+              return;
+            }
+            
+            const payload = JSON.parse(msgString);
+            
+            // Validate payload structure
+            if (!payload.hasOwnProperty('username') || !payload.hasOwnProperty('message')) {
+              console.warn('Received message with invalid structure, ignoring');
+              return;
+            }
+            
+            message = payload.username.trim() ? `${payload.username}: ${payload.message}` : payload.message;
+          } catch (error) {
+            console.error('Failed to parse broadcast message:', error);
+            console.error('Raw message:', msg.toString('utf8'));
+            return; // Skip this malformed message
+          }
           
-          const payload = JSON.parse(msg.toString());
-          message = payload.username.trim() ? `${payload.username}: ${payload.message}` : payload.message;
           const senderIp = rinfo.address;
           
           console.log(`Received broadcast message: ${message} from ${senderIp}:${rinfo.port}`);
@@ -131,7 +158,11 @@ export class BroadcastListener {
         mac: DeviceInfo.getMacAddress(),
       };
 
-      this.senderSocket.send(JSON.stringify(payload), 0, JSON.stringify(payload).length, BROADCAST_PORT, BROADCAST_ADDR, (err: any) => {
+      // Convert to JSON string
+      const jsonString = JSON.stringify(payload);
+      
+      // Use string directly with proper encoding - react-native-udp handles UTF-8
+      this.senderSocket.send(jsonString, 0, jsonString.length, BROADCAST_PORT, BROADCAST_ADDR, (err: any) => {
         if (err) {
           console.error('Error sending broadcast:', err);
           reject(err);
