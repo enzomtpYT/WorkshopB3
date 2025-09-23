@@ -35,7 +35,7 @@ const USERNAME_STORAGE_KEY = 'broadcast_username';
 
 interface AppState {
   inputText: string;
-  receivedMessages: Array<{message: string, timestamp: string, sender: string}>;
+  receivedMessages: Array<{message: string, timestamp: string, sender: string, isSent?: boolean}>;
   isListening: boolean;
   ownIpAddress: string | null;
   username: string;
@@ -45,7 +45,7 @@ interface AppState {
 class App extends Component<{}, AppState> {
   state = {
     inputText: '',
-    receivedMessages: [] as Array<{message: string, timestamp: string, sender: string}>,
+    receivedMessages: [] as Array<{message: string, timestamp: string, sender: string, isSent?: boolean}>,
     isListening: false,
     ownIpAddress: null as string | null,
     username: '' as string,
@@ -129,6 +129,17 @@ class App extends Component<{}, AppState> {
   sendMsg = async () => {
     if (this.state.inputText.trim()) {
       try {
+        // Add sent message to the list first
+        const sentMessage = {
+          message: this.state.inputText.trim(),
+          timestamp: new Date().toLocaleTimeString(),
+          sender: 'You',
+          isSent: true,
+        };
+        
+        this.setState((prevState: any) => ({
+          receivedMessages: [...prevState.receivedMessages, sentMessage],
+        }));
 
         await broadcastListener.sendBroadcast(this.state.inputText.trim(), this.state.username.trim());
         console.log('Message broadcasted successfully');
@@ -180,7 +191,7 @@ const AppContent: React.FC<{
   inputText: string;
   onTextChange: (text: string) => void;
   sendMsg: () => void;
-  receivedMessages: Array<{message: string, timestamp: string, sender: string}>;
+  receivedMessages: Array<{message: string, timestamp: string, sender: string, isSent?: boolean}>;
   isListening: boolean;
   onClearMessages: () => void;
   ownIpAddress: string | null;
@@ -250,6 +261,27 @@ const AppContent: React.FC<{
     messageCard: {
       marginBottom: 8,
       backgroundColor: theme.card,
+      maxWidth: '80%',
+    },
+    sentMessageCard: {
+      alignSelf: 'flex-end',
+      backgroundColor: theme.primary,
+      maxWidth: '80%',
+    },
+    receivedMessageCard: {
+      alignSelf: 'flex-start',
+      backgroundColor: theme.card,
+      maxWidth: '80%',
+    },
+    messageContainer: {
+      flexDirection: 'row',
+      marginBottom: 8,
+    },
+    sentMessageContainer: {
+      justifyContent: 'flex-end',
+    },
+    receivedMessageContainer: {
+      justifyContent: 'flex-start',
     },
     messageHeader: {
       flexDirection: 'row',
@@ -260,10 +292,19 @@ const AppContent: React.FC<{
       color: theme.text,
       fontSize: 16,
     },
+    sentMessageText: {
+      color: theme.textColored,
+      fontSize: 16,
+    },
     messageInfo: {
       color: theme.text,
       fontSize: 12,
       opacity: 0.7,
+    },
+    sentMessageInfo: {
+      color: theme.textColored,
+      fontSize: 12,
+      opacity: 0.8,
     },
     clearButton: {
       marginTop: 10,
@@ -328,21 +369,36 @@ const AppContent: React.FC<{
             </PaperText>
           ) : (
             receivedMessages.map((msg, index) => (
-              <Card key={index} style={styles.messageCard}>
-                <Card.Content>
-                  <View style={styles.messageHeader}>
-                    <PaperText style={styles.messageInfo}>
-                      From: {msg.sender}
+              <View 
+                key={index} 
+                style={[
+                  styles.messageContainer,
+                  msg.isSent ? styles.sentMessageContainer : styles.receivedMessageContainer
+                ]}
+              >
+                <Card 
+                  style={[
+                    styles.messageCard,
+                    msg.isSent ? styles.sentMessageCard : styles.receivedMessageCard
+                  ]}
+                >
+                  <Card.Content>
+                    <View style={styles.messageHeader}>
+                      {!msg.isSent && (
+                        <PaperText style={styles.messageInfo}>
+                          From: {msg.sender}
+                        </PaperText>
+                      )}
+                      <PaperText style={msg.isSent ? styles.sentMessageInfo : styles.messageInfo}>
+                        {msg.timestamp}
+                      </PaperText>
+                    </View>
+                    <PaperText style={msg.isSent ? styles.sentMessageText : styles.messageText}>
+                      {msg.message}
                     </PaperText>
-                    <PaperText style={styles.messageInfo}>
-                      {msg.timestamp}
-                    </PaperText>
-                  </View>
-                  <PaperText style={styles.messageText}>
-                    {msg.message}
-                  </PaperText>
-                </Card.Content>
-              </Card>
+                  </Card.Content>
+                </Card>
+              </View>
             ))
           )}
         </ScrollView>
