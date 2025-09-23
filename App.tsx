@@ -60,11 +60,11 @@ export const { ThemeProvider, useMaterialYouTheme } =
   MaterialYou.createThemeContext(generateTheme);
 
 // Helper to format a Date as 24-hour HH:MM
-function formatHHMM(date: Date = new Date()): string {
-  const h = date.getHours().toString().padStart(2, '0');
-  const m = date.getMinutes().toString().padStart(2, '0');
-  return `${h}:${m}`;
-}
+// function formatHHMM(date: Date = new Date()): string {
+//   const h = date.getHours().toString().padStart(2, '0');
+//   const m = date.getMinutes().toString().padStart(2, '0');
+//   return `${h}:${m}`;
+// }
 
 const USERNAME_STORAGE_KEY = 'broadcast_username';
 
