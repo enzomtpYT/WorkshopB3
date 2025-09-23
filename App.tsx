@@ -14,11 +14,10 @@ import {
   KeyboardAvoidingView,
   Platform,
   Keyboard,
-  StatusBar,
   NativeScrollEvent,
   NativeSyntheticEvent,
 } from 'react-native';
-import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets, SafeAreaProvider } from 'react-native-safe-area-context';
 import {
   TextInput,
   Button,
@@ -204,29 +203,29 @@ class App extends Component<{}, AppState> {
 
   render() {
     return (
-      <PaperProvider>
-        <SafeAreaProvider>
+      <SafeAreaProvider>
+        <PaperProvider>
           <ThemeProvider>
-          <AppContent
-            inputText={this.state.inputText}
-            onTextChange={this.onTextChange}
-            sendMsg={this.sendMsg}
-            receivedMessages={this.state.receivedMessages}
-            isListening={this.state.isListening}
-            onClearMessages={this.clearMessages}
-            ownIpAddress={this.state.ownIpAddress}
-            onOpenSettings={this.toggleSettings}
-            username={this.state.username}
-          />
-          <SettingsModal
-            visible={this.state.showSettings}
-            username={this.state.username}
-            onClose={this.toggleSettings}
-            onSave={this.saveUsername}
-          />
+            <AppContent
+              inputText={this.state.inputText}
+              onTextChange={this.onTextChange}
+              sendMsg={this.sendMsg}
+              receivedMessages={this.state.receivedMessages}
+              isListening={this.state.isListening}
+              onClearMessages={this.clearMessages}
+              ownIpAddress={this.state.ownIpAddress}
+              onOpenSettings={this.toggleSettings}
+              username={this.state.username}
+            />
+            <SettingsModal
+              visible={this.state.showSettings}
+              username={this.state.username}
+              onClose={this.toggleSettings}
+              onSave={this.saveUsername}
+            />
           </ThemeProvider>
-        </SafeAreaProvider>
-      </PaperProvider>
+        </PaperProvider>
+      </SafeAreaProvider>
     );
   }
 }
@@ -258,8 +257,8 @@ const AppContent: React.FC<{
   username,
 }) => {
   const theme = useMaterialYouTheme();
-  const insets = useSafeAreaInsets();
   const [keyboardVisible, setKeyboardVisible] = React.useState(false);
+  const insets = useSafeAreaInsets();
 
   React.useEffect(() => {
     const show = Keyboard.addListener('keyboardDidShow', () =>
@@ -277,10 +276,8 @@ const AppContent: React.FC<{
   const styles = StyleSheet.create({
     container: {
       flex: 1,
-      // Respect the OS safe area (status bar and navigation bar)
-      paddingTop:
-        insets.top || (Platform.OS === 'android' ? StatusBar.currentHeight || 24 : 0),
-      paddingBottom: insets.bottom,
+      paddingTop: insets.top,
+      paddingBottom: keyboardVisible ? 0 : insets.bottom,
       backgroundColor: theme.background,
     },
     input: { flex: 1, backgroundColor: theme.card },
@@ -290,8 +287,7 @@ const AppContent: React.FC<{
       gap: 10,
       marginBottom: 10,
       paddingHorizontal: 20,
-      // ensure the input area sits above the navigation bar
-      paddingBottom: 10 + insets.bottom,
+      paddingBottom: 10,
     },
     messagesContainer: {
       flex: 1,
@@ -377,7 +373,7 @@ const AppContent: React.FC<{
     <KeyboardAvoidingView
       style={styles.container}
       behavior={keyboardVisible ? (Platform.OS === 'ios' ? 'padding' : 'height') : undefined}
-      keyboardVerticalOffset={Platform.select({ ios: 64 + insets.top, android: 0 })}
+      keyboardVerticalOffset={0}
     >
       <View style={styles.messagesContainer}>
         <View style={styles.statusContainer}>
@@ -523,7 +519,6 @@ const SettingsModal: React.FC<{
 }> = ({ visible, username, onClose, onSave }) => {
   const [tempUsername, setTempUsername] = React.useState(username);
   const theme = useMaterialYouTheme();
-  const insets = useSafeAreaInsets();
 
   // Update temp username when the modal opens or username changes
   React.useEffect(() => {
@@ -553,8 +548,6 @@ const SettingsModal: React.FC<{
       maxHeight: '80%',
       // Ensure content can scroll if it grows too tall
       overflow: 'hidden',
-      // leave room for bottom navigation bar when modal is shown
-      paddingBottom: 20 + insets.bottom,
     },
     modalTitle: {
       fontSize: 20,
