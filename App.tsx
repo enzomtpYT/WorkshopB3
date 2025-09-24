@@ -8,7 +8,6 @@ import React, {
 } from 'react';
 import {
   View,
-  StyleSheet,
   ScrollView,
   Alert,
   Modal,
@@ -31,6 +30,12 @@ import {
   BottomNavigation,
 } from 'react-native-paper';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+
+import { 
+  createAppContentStyles, 
+  createBluetoothContentStyles, 
+  createSettingsModalStyles 
+} from './style';
 
 import MaterialYou from 'react-native-material-you-colors';
 import type { MaterialYouPalette } from 'react-native-material-you-colors';
@@ -576,77 +581,9 @@ const AppContent: React.FC<{
     };
   }, []);
 
-  const styles = StyleSheet.create({
-    container: {
-      flex: 1,
-      paddingTop: insets.top,
-      paddingBottom: keyboardVisible ? 0 : insets.bottom,
-      backgroundColor: theme.background,
-    },
-    input: { flex: 1, backgroundColor: theme.card },
-    inputContainer: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 10,
-      marginBottom: 10,
-      paddingHorizontal: 20,
-      paddingBottom: 10,
-    },
-    messagesContainer: {
-      flex: 1,
-      paddingTop: 20,
-      paddingHorizontal: 20,
-      paddingBottom: 0,
-    },
-    statusContainer: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'flex-start',
-      marginBottom: 10,
-    },
-    statusInfo: { flex: 1 },
-    buttonContainer: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-    statusText: { color: theme.text, fontSize: 14 },
-    clearButton: { marginTop: 10, backgroundColor: theme.card },
-    clearButtonLabel: { color: theme.text },
-    ipText: { color: theme.text, fontSize: 12, opacity: 0.7 },
-    // AJOUTER: Styles crypto
-    encryptionContainer: {
-      paddingHorizontal: 20,
-      paddingVertical: 10,
-      backgroundColor: theme.card,
-      marginHorizontal: 20,
-      borderRadius: 8,
-      marginBottom: 10,
-      borderLeftWidth: 3,
-      borderLeftColor: theme.primary,
-    },
-    encryptionLabel: {
-      color: theme.primary,
-      fontSize: 12,
-      fontWeight: 'bold',
-      marginBottom: 8,
-      textAlign: 'center',
-    },
-    encryptionInput: {
-      backgroundColor: theme.background,
-      fontSize: 14,
-    },
-    encryptionStatus: {
-      color: theme.text,
-      fontSize: 11,
-      opacity: 0.7,
-      textAlign: 'center',
-      marginTop: 5,
-    },
-    activeIcon: {
-      opacity: 1,
-    },
-    inactiveIcon: {
-      opacity: 0.7,
-    },
-  });
+  const styles = createAppContentStyles(theme, insets, keyboardVisible);
 
+  // ------- Auto-scroll + suivi clavier -------
   const scrollViewRef = useRef<ScrollView | null>(null);
   const [autoScroll, setAutoScroll] = useState(true);
 
@@ -840,45 +777,7 @@ const BluetoothContent: React.FC<{ username: string }> = ({ username }) => {
   const theme = useMaterialYouTheme();
   const insets = useSafeAreaInsets();
 
-  const styles = StyleSheet.create({
-    container: {
-      flex: 1,
-      paddingTop: insets.top,
-      paddingBottom: insets.bottom,
-      backgroundColor: theme.background,
-    },
-    content: {
-      flex: 1,
-      padding: 20,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    title: {
-      fontSize: 24,
-      fontWeight: 'bold',
-      color: theme.text,
-      marginBottom: 20,
-    },
-    placeholderText: {
-      textAlign: 'center',
-      color: theme.text,
-      opacity: 0.7,
-      marginBottom: 10,
-      lineHeight: 20,
-    },
-    usernameText: {
-      fontSize: 16,
-      color: theme.primary,
-      fontWeight: 'bold',
-      marginTop: 20,
-    },
-    activeIcon: {
-      opacity: 1,
-    },
-    inactiveIcon: {
-      opacity: 0.7,
-    },
-  });
+  const styles = createBluetoothContentStyles(theme, insets);
 
   return (
     <View style={styles.container}>
@@ -909,6 +808,7 @@ const SettingsModal: React.FC<{
 }> = ({ visible, username, onClose, onSave }) => {
   const [tempUsername, setTempUsername] = React.useState(username);
   const theme = useMaterialYouTheme();
+  const styles = React.useMemo(() => createSettingsModalStyles(theme), [theme]);
 
   useEffect(() => {
     setTempUsername(username);
@@ -919,41 +819,6 @@ const SettingsModal: React.FC<{
     onClose();
   };
 
-  const modalStyles = StyleSheet.create({
-    modalOverlay: {
-      flex: 1,
-      backgroundColor: 'rgba(0, 0, 0, 0.5)',
-      justifyContent: 'center',
-      alignItems: 'center',
-      padding: 20,
-    },
-    modalContent: {
-      backgroundColor: theme.background,
-      padding: 20,
-      margin: 0,
-      borderRadius: 10,
-      width: '90%',
-      maxWidth: 420,
-      maxHeight: '80%',
-      overflow: 'hidden',
-    },
-    modalTitle: {
-      fontSize: 20,
-      fontWeight: 'bold',
-      color: theme.text,
-      marginBottom: 20,
-      textAlign: 'center',
-    },
-    input: { marginBottom: 20, backgroundColor: theme.card },
-    buttonContainer: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      gap: 10,
-    },
-    button: { flex: 1 },
-    modalScrollContent: { paddingBottom: 8 },
-  });
-
   return (
     <Modal
       visible={visible}
@@ -961,35 +826,35 @@ const SettingsModal: React.FC<{
       animationType="fade"
       onRequestClose={onClose}
     >
-      <View style={modalStyles.modalOverlay}>
-        <View style={modalStyles.modalContent}>
-          <ScrollView contentContainerStyle={modalStyles.modalScrollContent}>
-            <PaperText style={modalStyles.modalTitle}>Settings</PaperText>
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <ScrollView contentContainerStyle={styles.modalScrollContent}>
+            <PaperText style={styles.modalTitle}>Settings</PaperText>
 
             <TextInput
               mode="outlined"
               label="Username"
               value={tempUsername}
               onChangeText={setTempUsername}
-              style={modalStyles.input}
+              style={styles.input}
               textColor={theme.text}
               outlineColor={theme.primary}
               activeOutlineColor={theme.primary}
               placeholder="Enter your username"
             />
 
-            <View style={modalStyles.buttonContainer}>
+            <View style={styles.buttonContainer}>
               <Button
                 mode="outlined"
                 onPress={onClose}
-                style={modalStyles.button}
+                style={styles.button}
               >
                 Cancel
               </Button>
               <Button
                 mode="contained"
                 onPress={handleSave}
-                style={modalStyles.button}
+                style={styles.button}
                 buttonColor={theme.primary}
                 textColor={theme.textColored}
               >
@@ -1012,6 +877,7 @@ const EncryptionSettingsModal: React.FC<{
   const [tempPassword, setTempPassword] = React.useState(userPassword);
   const [confirmPassword, setConfirmPassword] = React.useState('');
   const theme = useMaterialYouTheme();
+  const styles = React.useMemo(() => createSettingsModalStyles(theme), [theme]);
 
   useEffect(() => {
     setTempPassword(userPassword);
@@ -1031,47 +897,6 @@ const EncryptionSettingsModal: React.FC<{
     onClose();
   };
 
-  const modalStyles = StyleSheet.create({
-    modalOverlay: {
-      flex: 1,
-      backgroundColor: 'rgba(0, 0, 0, 0.5)',
-      justifyContent: 'center',
-      alignItems: 'center',
-      padding: 20,
-    },
-    modalContent: {
-      backgroundColor: theme.background,
-      padding: 20,
-      margin: 0,
-      borderRadius: 10,
-      width: '90%',
-      maxWidth: 420,
-    },
-    modalTitle: {
-      fontSize: 20,
-      fontWeight: 'bold',
-      color: theme.text,
-      marginBottom: 20,
-      textAlign: 'center',
-    },
-    input: { marginBottom: 15, backgroundColor: theme.card },
-    buttonContainer: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      gap: 10,
-      marginTop: 10,
-    },
-    button: { flex: 1 },
-    infoText: {
-      color: theme.text,
-      fontSize: 12,
-      opacity: 0.7,
-      textAlign: 'center',
-      marginBottom: 20,
-      lineHeight: 16,
-    },
-  });
-
   return (
     <Modal
       visible={visible}
@@ -1079,13 +904,13 @@ const EncryptionSettingsModal: React.FC<{
       animationType="fade"
       onRequestClose={onClose}
     >
-      <View style={modalStyles.modalOverlay}>
-        <View style={modalStyles.modalContent}>
-          <PaperText style={modalStyles.modalTitle}>
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <PaperText style={styles.modalTitle}>
             🔐 Encryption Settings
           </PaperText>
 
-          <PaperText style={modalStyles.infoText}>
+          <PaperText style={styles.infoText}>
             Set your encryption password. Others need this password to send you
             encrypted messages.
           </PaperText>
@@ -1095,7 +920,7 @@ const EncryptionSettingsModal: React.FC<{
             label="Your encryption password"
             value={tempPassword}
             onChangeText={setTempPassword}
-            style={modalStyles.input}
+            style={styles.input}
             secureTextEntry
             textColor={theme.text}
             outlineColor={theme.primary}
@@ -1108,7 +933,7 @@ const EncryptionSettingsModal: React.FC<{
             label="Confirm password"
             value={confirmPassword}
             onChangeText={setConfirmPassword}
-            style={modalStyles.input}
+            style={styles.input}
             secureTextEntry
             textColor={theme.text}
             outlineColor={theme.primary}
@@ -1116,18 +941,18 @@ const EncryptionSettingsModal: React.FC<{
             placeholder="Confirm your password"
           />
 
-          <View style={modalStyles.buttonContainer}>
+          <View style={styles.buttonContainer}>
             <Button
               mode="outlined"
               onPress={onClose}
-              style={modalStyles.button}
+              style={styles.button}
             >
               Cancel
             </Button>
             <Button
               mode="contained"
               onPress={handleSave}
-              style={modalStyles.button}
+              style={styles.button}
               buttonColor={theme.primary}
               textColor={theme.textColored}
               disabled={
