@@ -25,6 +25,7 @@ import {
   Text as PaperText,
   IconButton,
   Provider as PaperProvider,
+  BottomNavigation,
 } from 'react-native-paper';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -33,6 +34,7 @@ import type { MaterialYouPalette } from 'react-native-material-you-colors';
 import { broadcastListener } from './BroadcastListener';
 import MessageBubble from './MessageBubble';
 import { computeShowTimestampFlags } from './ShowTimestamp';
+import { bluetoothService, BluetoothDevice, BluetoothMessage } from './BluetoothService';
 
 function generateTheme(palette: MaterialYouPalette) {
   const light = {
@@ -80,6 +82,7 @@ interface AppState {
   ownIpAddress: string | null;
   username: string;
   showSettings: boolean;
+  activeTab: number;
 }
 
 class App extends Component<{}, AppState> {
@@ -90,6 +93,7 @@ class App extends Component<{}, AppState> {
     ownIpAddress: null,
     username: '',
     showSettings: false,
+    activeTab: 0,
   };
 
   componentDidMount() {
@@ -161,6 +165,10 @@ class App extends Component<{}, AppState> {
     this.saveUsernameToStorage(newUsername);
   };
 
+  handleTabChange = (index: number) => {
+    this.setState({ activeTab: index });
+  };
+
   sendMsg = async () => {
     if (this.state.inputText.trim()) {
       try {
@@ -189,21 +197,41 @@ class App extends Component<{}, AppState> {
 
   onTextChange = (text: string) => this.setState({ inputText: text });
 
+  renderBroadcastTab = () => (
+    <AppContent
+      inputText={this.state.inputText}
+      onTextChange={this.onTextChange}
+      sendMsg={this.sendMsg}
+      receivedMessages={this.state.receivedMessages}
+      isListening={this.state.isListening}
+      onClearMessages={this.clearMessages}
+      ownIpAddress={this.state.ownIpAddress}
+      onOpenSettings={this.toggleSettings}
+      username={this.state.username}
+    />
+  );
+
+  renderBluetoothTab = () => <BluetoothContent username={this.state.username} />;
+
   render() {
+    const routes = [
+      { key: 'broadcast', title: 'Broadcast', focusedIcon: 'wifi', unfocusedIcon: 'wifi-off' },
+      { key: 'bluetooth', title: 'Bluetooth', focusedIcon: 'bluetooth', unfocusedIcon: 'bluetooth-off' },
+    ];
+
+    const renderScene = BottomNavigation.SceneMap({
+      broadcast: this.renderBroadcastTab,
+      bluetooth: this.renderBluetoothTab,
+    });
+
     return (
       <SafeAreaProvider>
         <PaperProvider>
           <ThemeProvider>
-            <AppContent
-              inputText={this.state.inputText}
-              onTextChange={this.onTextChange}
-              sendMsg={this.sendMsg}
-              receivedMessages={this.state.receivedMessages}
-              isListening={this.state.isListening}
-              onClearMessages={this.clearMessages}
-              ownIpAddress={this.state.ownIpAddress}
-              onOpenSettings={this.toggleSettings}
-              username={this.state.username}
+            <BottomNavigation
+              navigationState={{ index: this.state.activeTab, routes }}
+              onIndexChange={this.handleTabChange}
+              renderScene={renderScene}
             />
             <SettingsModal
               visible={this.state.showSettings}
@@ -412,6 +440,368 @@ const AppContent: React.FC<{
         />
       </View>
     </KeyboardAvoidingView>
+  );
+};
+
+// Bluetooth Tab Component
+const BluetoothContent: React.FC<{ username: string }> = ({ username }) => {
+  const theme = useMaterialYouTheme();
+  const insets = useSafeAreaInsets();
+  const [detectedDevices, setDetectedDevices] = useState<BluetoothDevice[]>([]);
+  const [isScanning, setIsScanning] = useState(false);
+  const [messages, setMessages] = useState<BluetoothMessage[]>([]);
+  const [isInitialized, setIsInitialized] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const styles = StyleSheet.create({
+    container: {
+      flex: 1,
+      paddingTop: insets.top,
+      paddingBottom: insets.bottom,
+      backgroundColor: theme.background,
+    },
+    content: {
+      flex: 1,
+      padding: 20,
+    },
+    headerContainer: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 20,
+    },
+    title: {
+      fontSize: 24,
+      fontWeight: 'bold',
+      color: theme.text,
+    },
+    sectionTitle: {
+      fontSize: 18,
+      fontWeight: 'bold',
+      color: theme.text,
+      marginTop: 20,
+      marginBottom: 10,
+    },
+    deviceItem: {
+      backgroundColor: theme.card,
+      padding: 15,
+      marginVertical: 5,
+      borderRadius: 8,
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
+    deviceInfo: {
+      flex: 1,
+    },
+    deviceName: {
+      fontSize: 16,
+      fontWeight: 'bold',
+      color: theme.text,
+    },
+    deviceAddress: {
+      fontSize: 12,
+      color: theme.text,
+      opacity: 0.7,
+    },
+    deviceStatus: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+    },
+    statusText: {
+      fontSize: 12,
+      color: theme.text,
+      opacity: 0.8,
+    },
+    emptyText: {
+      textAlign: 'center',
+      color: theme.text,
+      opacity: 0.7,
+      marginTop: 20,
+    },
+    errorText: {
+      textAlign: 'center',
+      color: theme.primary,
+      marginTop: 20,
+      marginBottom: 10,
+    },
+    scanButton: {
+      backgroundColor: theme.primary,
+    },
+    scanButtonDisabled: {
+      backgroundColor: theme.card,
+    },
+    messagesContainer: {
+      flex: 1,
+    },
+    retryButton: {
+      marginTop: 10,
+      alignSelf: 'center',
+    },
+    deviceHint: {
+      fontSize: 12,
+      color: theme.text,
+      opacity: 0.7,
+      fontStyle: 'italic',
+    },
+    usernameText: {
+      fontSize: 12,
+      color: theme.text,
+      opacity: 0.7,
+      fontWeight: 'bold',
+    },
+  });
+
+  // Initialize Bluetooth service
+  useEffect(() => {
+    const initializeBluetooth = async () => {
+      try {
+        setError(null);
+        console.log('Starting Bluetooth initialization...');
+        
+        await bluetoothService.initialize(username || 'Anonymous');
+        
+        // Set up callbacks
+        bluetoothService.setOnDeviceFound((device: BluetoothDevice) => {
+          setDetectedDevices(prev => {
+            const exists = prev.find(d => d.id === device.id);
+            if (!exists) {
+              return [...prev, device];
+            }
+            return prev;
+          });
+        });
+
+        bluetoothService.setOnMessageReceived((message: BluetoothMessage) => {
+          setMessages(prev => [...prev, message]);
+        });
+
+        // Start advertising so others can find us (may not work on all devices)
+        await bluetoothService.startAdvertising();
+        
+        setIsInitialized(true);
+        console.log('Bluetooth initialization completed successfully');
+
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Failed to initialize Bluetooth';
+        console.error('Bluetooth initialization failed:', errorMessage);
+        setError(errorMessage);
+        setIsInitialized(false);
+      }
+    };
+
+    // Initialize immediately
+    initializeBluetooth();
+
+    return () => {
+      bluetoothService.cleanup();
+    };
+  }, [username]); // Include username as dependency
+
+  const startScan = async () => {
+    if (!isInitialized) {
+      Alert.alert('Error', 'Bluetooth not initialized');
+      return;
+    }
+
+    setIsScanning(true);
+    setDetectedDevices([]); // Clear previous results
+    
+    try {
+      await bluetoothService.startScanning();
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to start scanning');
+      Alert.alert('Scan Error', err instanceof Error ? err.message : 'Failed to start scanning');
+    } finally {
+      // The service will automatically stop scanning after 30 seconds
+      setTimeout(() => {
+        setIsScanning(bluetoothService.getIsScanning());
+      }, 30500);
+    }
+  };
+
+  const connectToDevice = async (deviceId: string) => {
+    try {
+      const device = detectedDevices.find(d => d.id === deviceId);
+      if (!device) return;
+
+      if (device.connected) {
+        // Disconnect
+        await bluetoothService.disconnectFromDevice(deviceId);
+        setDetectedDevices(prev => 
+          prev.map(d => 
+            d.id === deviceId 
+              ? { ...d, connected: false }
+              : d
+          )
+        );
+      } else {
+        // Connect
+        try {
+          await bluetoothService.connectToDevice(deviceId);
+          setDetectedDevices(prev => 
+            prev.map(d => 
+              d.id === deviceId 
+                ? { ...d, connected: true }
+                : d
+            )
+          );
+          Alert.alert('Success', 'Connected to Workshop app user!');
+        } catch (connectErr) {
+          // If connection fails due to missing service, show a different message
+          const errorMessage = connectErr instanceof Error ? connectErr.message : 'Failed to connect';
+          if (errorMessage.includes('Workshop app')) {
+            Alert.alert('Not a Workshop App', 'This device does not appear to be running the Workshop app.');
+          } else {
+            throw connectErr; // Re-throw other errors
+          }
+        }
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to connect to device';
+      Alert.alert('Connection Error', errorMessage);
+    }
+  };
+
+  const clearMessages = () => {
+    setMessages([]);
+  };
+
+  return (
+    <View style={styles.container}>
+      <View style={styles.content}>
+        <View style={styles.headerContainer}>
+          <PaperText style={styles.title}>Bluetooth Chat</PaperText>
+          <Button
+            mode="contained"
+            onPress={startScan}
+            disabled={isScanning || !isInitialized}
+            style={isScanning || !isInitialized ? styles.scanButtonDisabled : styles.scanButton}
+            loading={isScanning}
+            compact
+          >
+            {isScanning ? 'Scanning...' : 'Scan'}
+          </Button>
+        </View>
+
+        {error && (
+          <View>
+            <PaperText style={styles.errorText}>
+              {error}
+            </PaperText>
+            <Button
+              mode="outlined"
+              onPress={() => {
+                setError(null);
+                setIsInitialized(false);
+                // Trigger re-initialization
+                bluetoothService.initialize(username || 'Anonymous').then(() => {
+                  setIsInitialized(true);
+                }).catch((err) => {
+                  setError(err instanceof Error ? err.message : 'Failed to initialize Bluetooth');
+                });
+              }}
+              style={styles.retryButton}
+            >
+              Retry
+            </Button>
+          </View>
+        )}
+
+        {!isInitialized && !error && (
+          <PaperText style={styles.emptyText}>
+            Initializing Bluetooth...
+          </PaperText>
+        )}
+
+        <View style={styles.headerContainer}>
+          <PaperText style={styles.sectionTitle}>Detected Devices ({detectedDevices.length})</PaperText>
+          {detectedDevices.length > 0 && (
+            <Button
+              mode="outlined"
+              onPress={() => setDetectedDevices([])}
+              compact
+            >
+              Clear
+            </Button>
+          )}
+        </View>
+        <ScrollView>
+          {detectedDevices.length === 0 ? (
+            <PaperText style={styles.emptyText}>
+              {isScanning ? 'Scanning for nearby devices...' : 'No devices found. Tap "Scan" to search for nearby devices. Devices will be verified for Workshop app when you connect.'}
+            </PaperText>
+          ) : (
+            detectedDevices.map((device) => (
+              <View key={device.id} style={styles.deviceItem}>
+                <View style={styles.deviceInfo}>
+                  <PaperText style={styles.deviceName}>
+                    {device.name}
+                    {device.name?.startsWith('Workshop-') && ' ✓'}
+                  </PaperText>
+                  {device.username && device.username !== 'Unknown User' && (
+                    <PaperText style={styles.usernameText}>
+                      User: {device.username}
+                    </PaperText>
+                  )}
+                  <PaperText style={styles.deviceAddress}>{device.address}</PaperText>
+                  {device.rssi && (
+                    <PaperText style={styles.deviceAddress}>
+                      Signal: {device.rssi} dBm ({device.rssi > -50 ? 'Strong' : device.rssi > -70 ? 'Medium' : 'Weak'})
+                    </PaperText>
+                  )}
+                  <PaperText style={styles.deviceHint}>
+                    {device.name?.startsWith('Workshop-') 
+                      ? 'Verified Workshop app device' 
+                      : 'Potential device - connect to verify Workshop app'}
+                  </PaperText>
+                </View>
+                <View style={styles.deviceStatus}>
+                  <IconButton
+                    icon={device.connected ? 'bluetooth-connect' : device.name?.startsWith('Workshop-') ? 'shield-check' : 'bluetooth'}
+                    size={20}
+                    iconColor={device.connected ? theme.primary : device.name?.startsWith('Workshop-') ? '#4CAF50' : theme.text}
+                    onPress={() => connectToDevice(device.id)}
+                  />
+                  <PaperText style={styles.statusText}>
+                    {device.connected ? 'Connected' : 'Tap to connect'}
+                  </PaperText>
+                </View>
+              </View>
+            ))
+          )}
+        </ScrollView>
+
+        <View style={styles.headerContainer}>
+          <PaperText style={styles.sectionTitle}>Messages</PaperText>
+          <Button
+            mode="outlined"
+            onPress={clearMessages}
+            disabled={messages.length === 0}
+            compact
+          >
+            Clear
+          </Button>
+        </View>
+        <ScrollView style={styles.messagesContainer}>
+          {messages.length === 0 ? (
+            <PaperText style={styles.emptyText}>
+              No messages yet. Connect to a device to start chatting.
+            </PaperText>
+          ) : (
+            messages.map((msg, index) => (
+              <View key={index} style={styles.deviceItem}>
+                <PaperText style={styles.deviceName}>
+                  {msg.deviceName}: {msg.message}
+                </PaperText>
+              </View>
+            ))
+          )}
+        </ScrollView>
+      </View>
+    </View>
   );
 };
 
