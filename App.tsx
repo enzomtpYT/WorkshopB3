@@ -452,6 +452,7 @@ const BluetoothContent: React.FC<{ username: string }> = ({ username }) => {
   const [messages, setMessages] = useState<BluetoothMessage[]>([]);
   const [isInitialized, setIsInitialized] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [inputText, setInputText] = useState('');
 
   const styles = StyleSheet.create({
     container: {
@@ -551,6 +552,27 @@ const BluetoothContent: React.FC<{ username: string }> = ({ username }) => {
       opacity: 0.7,
       fontWeight: 'bold',
     },
+    inputContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      marginTop: 10,
+      paddingHorizontal: 20,
+      paddingBottom: 10,
+    },
+    input: {
+      flex: 1,
+      backgroundColor: theme.card,
+    },
+    signalContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+    },
+    signalIcon: {
+      margin: 0,
+      padding: 0,
+    },
   });
 
   // Initialize Bluetooth service
@@ -568,8 +590,14 @@ const BluetoothContent: React.FC<{ username: string }> = ({ username }) => {
             const exists = prev.find(d => d.id === device.id);
             if (!exists) {
               return [...prev, device];
+            } else {
+              // Update existing device with latest RSSI if it's stronger
+              return prev.map(d => 
+                d.id === device.id && device.rssi && (!d.rssi || device.rssi > d.rssi)
+                  ? { ...d, rssi: device.rssi }
+                  : d
+              );
             }
-            return prev;
           });
         });
 
@@ -669,6 +697,30 @@ const BluetoothContent: React.FC<{ username: string }> = ({ username }) => {
     setMessages([]);
   };
 
+  const getSignalColor = (rssi: number): string => {
+    if (rssi > -50) return '#4CAF50'; // Strong - Green
+    if (rssi > -70) return '#FF9800'; // Medium - Orange
+    return '#F44336'; // Weak - Red
+  };
+
+  const sendMessage = async () => {
+    if (!inputText.trim()) return;
+    
+    const connectedDevices = bluetoothService.getConnectedDevices();
+    if (connectedDevices.length === 0) {
+      Alert.alert('No Connections', 'Please connect to at least one device first');
+      return;
+    }
+
+    try {
+      await bluetoothService.broadcastMessage(inputText.trim());
+      setInputText('');
+    } catch (sendError) {
+      console.error('Failed to send message:', sendError);
+      Alert.alert('Send Error', sendError instanceof Error ? sendError.message : 'Failed to send message');
+    }
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.content}>
@@ -717,7 +769,9 @@ const BluetoothContent: React.FC<{ username: string }> = ({ username }) => {
         )}
 
         <View style={styles.headerContainer}>
-          <PaperText style={styles.sectionTitle}>Detected Devices ({detectedDevices.length})</PaperText>
+          <PaperText style={styles.sectionTitle}>
+            Detected Devices ({detectedDevices.length}) | Connected ({bluetoothService.getConnectedDevices().length})
+          </PaperText>
           {detectedDevices.length > 0 && (
             <Button
               mode="outlined"
@@ -734,7 +788,15 @@ const BluetoothContent: React.FC<{ username: string }> = ({ username }) => {
               {isScanning ? 'Scanning for nearby devices...' : 'No devices found. Tap "Scan" to search for nearby devices. Devices will be verified for Workshop app when you connect.'}
             </PaperText>
           ) : (
-            detectedDevices.map((device) => (
+            detectedDevices
+              .sort((a, b) => {
+                // Sort by signal strength (RSSI) in descending order
+                // Higher RSSI values (closer to 0) indicate stronger signals
+                const rssiA = a.rssi || -100; // Default to very weak signal if no RSSI
+                const rssiB = b.rssi || -100;
+                return rssiB - rssiA;
+              })
+              .map((device) => (
               <View key={device.id} style={styles.deviceItem}>
                 <View style={styles.deviceInfo}>
                   <PaperText style={styles.deviceName}>
@@ -748,9 +810,24 @@ const BluetoothContent: React.FC<{ username: string }> = ({ username }) => {
                   )}
                   <PaperText style={styles.deviceAddress}>{device.address}</PaperText>
                   {device.rssi && (
-                    <PaperText style={styles.deviceAddress}>
-                      Signal: {device.rssi} dBm ({device.rssi > -50 ? 'Strong' : device.rssi > -70 ? 'Medium' : 'Weak'})
-                    </PaperText>
+                    <View style={styles.signalContainer}>
+                      <IconButton
+                        icon={
+                          device.rssi > -50 ? 'wifi-strength-4' : 
+                          device.rssi > -70 ? 'wifi-strength-3' : 
+                          device.rssi > -85 ? 'wifi-strength-2' : 'wifi-strength-1'
+                        }
+                        size={16}
+                        iconColor={getSignalColor(device.rssi)}
+                        style={styles.signalIcon}
+                      />
+                      <PaperText style={[
+                        styles.deviceAddress,
+                        { color: getSignalColor(device.rssi) }
+                      ]}>
+                        {device.rssi} dBm ({device.rssi > -50 ? 'Strong' : device.rssi > -70 ? 'Medium' : 'Weak'})
+                      </PaperText>
+                    </View>
                   )}
                   <PaperText style={styles.deviceHint}>
                     {device.name?.startsWith('Workshop-') 
@@ -800,6 +877,30 @@ const BluetoothContent: React.FC<{ username: string }> = ({ username }) => {
             ))
           )}
         </ScrollView>
+        
+        {/* Message Input */}
+        <View style={styles.inputContainer}>
+          <TextInput
+            mode="outlined"
+            label="Message"
+            value={inputText}
+            onChangeText={setInputText}
+            style={styles.input}
+            textColor={theme.text}
+            outlineColor={theme.primary}
+            activeOutlineColor={theme.primary}
+            placeholder={`Send GATT message to ${bluetoothService.getConnectedDevices().length} connected device(s)...`}
+            disabled={!isInitialized || bluetoothService.getConnectedDevices().length === 0}
+          />
+          <IconButton
+            icon="send"
+            onPress={sendMessage}
+            iconColor={theme.textColored}
+            containerColor={theme.primary}
+            disabled={!inputText.trim() || !isInitialized || bluetoothService.getConnectedDevices().length === 0}
+            size={24}
+          />
+        </View>
       </View>
     </View>
   );
