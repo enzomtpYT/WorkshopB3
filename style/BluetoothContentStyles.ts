@@ -33,4 +33,10 @@ export const createBluetoothContentStyles = (theme: any, insets: any) =>
       fontWeight: 'bold',
       marginTop: 20,
     },
+    activeIcon: {
+      opacity: 1,
+    },
+    inactiveIcon: {
+      opacity: 0.7,
+    },
   });

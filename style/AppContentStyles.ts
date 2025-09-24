@@ -56,4 +56,39 @@ export const createAppContentStyles = (theme: any, insets: any, keyboardVisible:
       fontSize: 12, 
       opacity: 0.7 
     },
+        // AJOUTER: Styles crypto
+    encryptionContainer: {
+      paddingHorizontal: 20,
+      paddingVertical: 10,
+      backgroundColor: theme.card,
+      marginHorizontal: 20,
+      borderRadius: 8,
+      marginBottom: 10,
+      borderLeftWidth: 3,
+      borderLeftColor: theme.primary,
+    },
+    encryptionLabel: {
+      color: theme.primary,
+      fontSize: 12,
+      fontWeight: 'bold',
+      marginBottom: 8,
+      textAlign: 'center',
+    },
+    encryptionInput: {
+      backgroundColor: theme.background,
+      fontSize: 14,
+    },
+    encryptionStatus: {
+      color: theme.text,
+      fontSize: 11,
+      opacity: 0.7,
+      textAlign: 'center',
+      marginTop: 5,
+    },
+    activeIcon: {
+      opacity: 1,
+    },
+    inactiveIcon: {
+      opacity: 0.7,
+    },
   });
