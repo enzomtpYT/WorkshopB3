@@ -1,16 +1,15 @@
 import { StyleSheet } from 'react-native';
 
-export const createAppContentStyles = (theme: any, insets: any, keyboardVisible: boolean) =>
+export const createAppContentStyles = (theme: any, insets: any) =>
   StyleSheet.create({
     container: {
       flex: 1,
       paddingTop: insets.top,
-      paddingBottom: keyboardVisible ? 0 : insets.bottom,
-      backgroundColor: theme.background,
+      paddingBottom: 0,
     },
     input: { 
       flex: 1, 
-      backgroundColor: theme.card 
+      backgroundColor: theme.card,
     },
     inputContainer: {
       flexDirection: 'row',
@@ -38,7 +37,7 @@ export const createAppContentStyles = (theme: any, insets: any, keyboardVisible:
     buttonContainer: { 
       flexDirection: 'row', 
       alignItems: 'center', 
-      gap: 8 
+      gap: 8
     },
     statusText: { 
       color: theme.text, 
