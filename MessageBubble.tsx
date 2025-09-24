@@ -1,6 +1,7 @@
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View } from 'react-native';
 import { Card, Text as PaperText } from 'react-native-paper';
+import { createMessageBubbleStyles } from './style/MessageBubbleStyles';
 
 type Msg = {
   message: string;
@@ -24,7 +25,7 @@ const GAP = 8; // espace entre texte et heure
 
 const MessageBubble: React.FC<{
   msg: Msg;
-  showTime: boolean; // tu continues à ne l’afficher que sur le dernier du lot
+  showTime: boolean; // tu continues à ne l'afficher que sur le dernier du lot
   theme: any;
 }> = ({ msg, showTime, theme }) => {
   const timeStr = formatTime(msg.timestamp);
@@ -35,7 +36,7 @@ const MessageBubble: React.FC<{
   const [timeWidth, setTimeWidth] = React.useState(0);
   const [lineTexts, setLineTexts] = React.useState<string[] | null>(null);
 
-  // Décision : l’heure tient sur la dernière ligne ET flush-right ?
+  // Décision : l'heure tient sur la dernière ligne ET flush-right ?
   const canInlineTime =
     showTime &&
     lastLineWidth > 0 &&
@@ -44,58 +45,8 @@ const MessageBubble: React.FC<{
     lastLineWidth + GAP + timeWidth <= textBoxWidth;
 
   const styles = React.useMemo(
-    () =>
-      StyleSheet.create({
-        wrap: {
-          flexDirection: 'row',
-          marginBottom: 8,
-          justifyContent: msg.isSent ? 'flex-end' : 'flex-start',
-        },
-        card: {
-          maxWidth: '80%',
-          backgroundColor: msg.isSent ? theme.primary : theme.card,
-          alignSelf: msg.isSent ? 'flex-end' : 'flex-start',
-        },
-        content: { paddingBottom: 6, paddingTop: 5 },
-        contentWithBottomTime: { paddingBottom: 18 }, // quand l’heure est en bas-droite
-
-        header: {
-          flexDirection: 'row',
-          justifyContent: 'space-between',
-          marginBottom: 2,
-        },
-
-        text: { color: msg.isSent ? theme.textColored : theme.text, fontSize: 14 },
-
-        info: { color: msg.isSent ? theme.textColored : theme.text, fontSize: 11, opacity: 0.75 },
-
-        textBox: { position: 'relative', width: '100%' }, // prend toute la largeur de la bulle
-
-        // Heure en bas-droite du Card.Content (mode non-inline)
-        timeBottomRight: { position: 'absolute', right: 8, bottom: 6, zIndex: 1 },
-
-        // Ligne finale en "row" quand ça tient
-        lastLineRow: {
-          flexDirection: 'row',
-          alignItems: 'flex-end',
-          width: '100%',
-        },
-        lastLineTextWrap: {
-          flex: 1,            // occupe tout l'espace restant
-          paddingRight: GAP,  // l'écart visuel avec l'heure
-        },
-        lastLineText: {
-          color: msg.isSent ? theme.textColored : theme.text,
-          fontSize: 14,
-          // flexShrink: 1,
-          // garantit qu'elle reste sur 1 ligne car on sait que ça tient
-        },
-        timeInlineLabel: {
-          // label d’heure à droite de la dernière ligne
-          marginLeft: 0,
-        },
-      }),
-    [msg.isSent, theme],
+    () => createMessageBubbleStyles(msg, theme),
+    [msg, theme],
   );
 
   const contentStyle = [

@@ -8,7 +8,6 @@ import React, {
 } from 'react';
 import {
   View,
-  StyleSheet,
   ScrollView,
   Alert,
   Modal,
@@ -31,6 +30,12 @@ import {
   BottomNavigation,
 } from 'react-native-paper';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+
+import { 
+  createAppContentStyles, 
+  createBluetoothContentStyles, 
+  createSettingsModalStyles 
+} from './style';
 
 import MaterialYou from 'react-native-material-you-colors';
 import type { MaterialYouPalette } from 'react-native-material-you-colors';
@@ -312,41 +317,7 @@ const AppContent: React.FC<{
     };
   }, []);
 
-  const styles = StyleSheet.create({
-    container: {
-      flex: 1,
-      paddingTop: insets.top,
-      paddingBottom: keyboardVisible ? 0 : insets.bottom,
-      backgroundColor: theme.background,
-    },
-    input: { flex: 1, backgroundColor: theme.card },
-    inputContainer: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 10,
-      marginBottom: 10,
-      paddingHorizontal: 20,
-      paddingBottom: 10,
-    },
-    messagesContainer: {
-      flex: 1,
-      paddingTop: 20,
-      paddingHorizontal: 20,
-      paddingBottom: 0,
-    },
-    statusContainer: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'flex-start',
-      marginBottom: 10,
-    },
-    statusInfo: { flex: 1 },
-    buttonContainer: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-    statusText: { color: theme.text, fontSize: 14 },
-    clearButton: { marginTop: 10, backgroundColor: theme.card },
-    clearButtonLabel: { color: theme.text },
-    ipText: { color: theme.text, fontSize: 12, opacity: 0.7 },
-  });
+  const styles = createAppContentStyles(theme, insets, keyboardVisible);
 
   // ------- Auto-scroll + suivi clavier -------
   const scrollViewRef = useRef<ScrollView | null>(null);
@@ -491,39 +462,7 @@ const BluetoothContent: React.FC<{ username: string }> = ({ username }) => {
   const theme = useMaterialYouTheme();
   const insets = useSafeAreaInsets();
 
-  const styles = StyleSheet.create({
-    container: {
-      flex: 1,
-      paddingTop: insets.top,
-      paddingBottom: insets.bottom,
-      backgroundColor: theme.background,
-    },
-    content: {
-      flex: 1,
-      padding: 20,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    title: {
-      fontSize: 24,
-      fontWeight: 'bold',
-      color: theme.text,
-      marginBottom: 20,
-    },
-    placeholderText: {
-      textAlign: 'center',
-      color: theme.text,
-      opacity: 0.7,
-      marginBottom: 10,
-      lineHeight: 20,
-    },
-    usernameText: {
-      fontSize: 16,
-      color: theme.primary,
-      fontWeight: 'bold',
-      marginTop: 20,
-    },
-  });
+  const styles = createBluetoothContentStyles(theme, insets);
 
   return (
     <View style={styles.container}>
@@ -565,40 +504,7 @@ const SettingsModal: React.FC<{
     onClose();
   };
 
-  const modalStyles = StyleSheet.create({
-    modalOverlay: {
-      flex: 1,
-      backgroundColor: 'rgba(0, 0, 0, 0.5)',
-      justifyContent: 'center',
-      alignItems: 'center',
-      padding: 20,
-    },
-    modalContent: {
-      backgroundColor: theme.background,
-      padding: 20,
-      margin: 0,
-      borderRadius: 10,
-      width: '90%',
-      maxWidth: 420,
-      maxHeight: '80%',
-      overflow: 'hidden',
-    },
-    modalTitle: {
-      fontSize: 20,
-      fontWeight: 'bold',
-      color: theme.text,
-      marginBottom: 20,
-      textAlign: 'center',
-    },
-    input: { marginBottom: 20, backgroundColor: theme.card },
-    buttonContainer: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      gap: 10,
-    },
-    button: { flex: 1 },
-    modalScrollContent: { paddingBottom: 8 },
-  });
+  const modalStyles = createSettingsModalStyles(theme);
 
   return (
     <Modal
