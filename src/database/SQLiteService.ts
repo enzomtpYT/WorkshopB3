@@ -7,6 +7,9 @@ export interface Message {
   sender: string;
   isSent: boolean;
   senderIp?: string;
+  isEncrypted?: boolean;        // NOUVEAU: Indique si le message est chiffré
+  encryptionTarget?: string;    // NOUVEAU: Username du destinataire
+  decryptionFailed?: boolean;   // NOUVEAU: Indique si le déchiffrement a échoué
 }
 
 class SQLiteService {
@@ -48,7 +51,10 @@ class SQLiteService {
               timestamp TEXT NOT NULL,
               sender TEXT NOT NULL,
               isSent INTEGER DEFAULT 0,
-              senderIp TEXT
+              senderIp TEXT,
+              isEncrypted INTEGER DEFAULT 0,
+              encryptionTarget TEXT,
+              decryptionFailed INTEGER DEFAULT 0
             )`,
             [],
             () => {
@@ -78,12 +84,15 @@ class SQLiteService {
         return;
       }
 
-      const id = Date.now().toString() + Math.random().toString(36);
+      const id = Date.now().toString() + Math.random().toString(36).substr(2, 9);
 
       this.db.transaction(
         (tx) => {
           tx.executeSql(
-            'INSERT INTO messages (id, message, timestamp, sender, isSent, senderIp) VALUES (?, ?, ?, ?, ?, ?)',
+            `INSERT INTO messages (
+              id, message, timestamp, sender, isSent, senderIp, 
+              isEncrypted, encryptionTarget, decryptionFailed
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
               id,
               messageData.message,
@@ -91,6 +100,9 @@ class SQLiteService {
               messageData.sender,
               messageData.isSent ? 1 : 0,
               messageData.senderIp || null,
+              messageData.isEncrypted ? 1 : 0,
+              messageData.encryptionTarget || null,
+              messageData.decryptionFailed ? 1 : 0,
             ],
             () => {
               console.log('Message saved successfully');
@@ -133,6 +145,9 @@ class SQLiteService {
                   sender: row.sender,
                   isSent: row.isSent === 1,
                   senderIp: row.senderIp,
+                  isEncrypted: row.isEncrypted === 1,
+                  encryptionTarget: row.encryptionTarget,
+                  decryptionFailed: row.decryptionFailed === 1,
                 });
               }
               resolve(messages);

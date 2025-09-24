@@ -38,6 +38,7 @@ import { broadcastListener } from './BroadcastListener';
 import MessageBubble from './MessageBubble';
 import { computeShowTimestampFlags } from './ShowTimestamp';
 import { sqliteService, Message } from './src/database/SQLiteService';
+import { cryptoService, EncryptedMessage } from './src/crypto/CryptoService';
 
 // GARDER: La fonction extractSenderAndBody de main
 function extractSenderAndBody(raw: string): { sender?: string; body: string } {
@@ -105,6 +106,10 @@ interface AppState {
   username: string;
   isDatabaseInitialized: boolean;
   activeTab: number;
+  userPassword: string;           // NOUVEAU: Mot de passe de l'utilisateur
+  encryptionMode: boolean;        // NOUVEAU: Mode chiffrement activé
+  recipientPassword: string;      // NOUVEAU: Mot de passe du destinataire
+  showEncryptionSettings: boolean; // NOUVEAU: Modal paramètres crypto
 }
 
 class App extends Component<{}, AppState> {
@@ -117,12 +122,17 @@ class App extends Component<{}, AppState> {
     showSettings: false,
     isDatabaseInitialized: false,
     activeTab: 0,
+    userPassword: '',
+    encryptionMode: false,
+    recipientPassword: '',
+    showEncryptionSettings: false,
   };
 
   async componentDidMount() {
     await this.initializeDatabase(); 
     this.startBroadcastListener();
     this.loadUsername();
+    this.loadUserPassword(); // NOUVEAU
     this.loadMessages(); 
   }
 
@@ -176,31 +186,163 @@ class App extends Component<{}, AppState> {
     }
   };
 
+  // NOUVEAU: Charger le mot de passe utilisateur
+  loadUserPassword = async () => {
+    try {
+      const savedPassword = await AsyncStorage.getItem('user_encryption_password');
+      if (savedPassword) {
+        this.setState({ userPassword: savedPassword });
+      }
+    } catch (error) {
+      console.error('Failed to load user password:', error);
+    }
+  };
+
+  // NOUVEAU: Sauvegarder le mot de passe utilisateur
+  saveUserPassword = async (password: string) => {
+    try {
+      await AsyncStorage.setItem('user_encryption_password', password);
+      this.setState({ userPassword: password });
+    } catch (error) {
+      console.error('Failed to save user password:', error);
+    }
+  };
+
+  // NOUVEAU: Toggle mode chiffrement
+  toggleEncryptionMode = () => {
+    this.setState(prev => ({ encryptionMode: !prev.encryptionMode }));
+  };
+
+  // NOUVEAU: Ouvrir settings crypto
+  openEncryptionSettings = () => {
+    this.setState({ showEncryptionSettings: true });
+  };
+
+  // NOUVEAU: Fermer settings crypto
+  closeEncryptionSettings = () => {
+    this.setState({ showEncryptionSettings: false });
+  };
+
+  // MODIFIER: sendMsg avec support du chiffrement
+  sendMsg = async () => {
+    if (this.state.inputText.trim()) {
+      try {
+        let messageToSend = this.state.inputText.trim();
+        let messageToStore = messageToSend;
+        let isEncrypted = false;
+        let encryptionTarget: string | undefined;
+
+        // Si le mode chiffrement est activé
+        if (this.state.encryptionMode && this.state.recipientPassword) {
+          try {
+            const encryptedData = cryptoService.encryptMessage(
+              messageToSend,
+              this.state.recipientPassword,
+              'recipient' // Ou le username du destinataire si vous l'avez
+            );
+
+            // Message à envoyer (JSON chiffré)
+            messageToSend = JSON.stringify(encryptedData);
+            // Message à stocker (texte original + indicateur)
+            messageToStore = `🔒 [Encrypted] ${this.state.inputText.trim()}`;
+            isEncrypted = true;
+            encryptionTarget = 'recipient';
+          } catch (error) {
+            Alert.alert('Encryption Error', 'Failed to encrypt message');
+            return;
+          }
+        }
+
+        // Sauvegarder en base de données
+        const messageId = await sqliteService.saveMessage({
+          message: messageToStore,
+          timestamp: this.formatHHMM(new Date()),
+          sender: 'You',
+          isSent: true,
+          isEncrypted,
+          encryptionTarget,
+        });
+
+        // Créer le message pour l'état
+        const sentMessage: Message = {
+          _id: messageId,
+          message: messageToStore,
+          timestamp: this.formatHHMM(new Date()),
+          sender: 'You',
+          isSent: true,
+          isEncrypted,
+          encryptionTarget,
+        };
+
+        this.setState((prev) => ({
+          receivedMessages: [...prev.receivedMessages, sentMessage],
+        }));
+
+        // Envoyer le message (chiffré ou non)
+        await broadcastListener.sendBroadcast(messageToSend, this.state.username.trim());
+      } catch (error) {
+        console.error('Failed to broadcast message:', error);
+        Alert.alert('Error', 'Failed to send broadcast message');
+      }
+    }
+    this.setState({ inputText: '' });
+  };
+
+  // MODIFIER: startBroadcastListener avec support du déchiffrement
   startBroadcastListener = async () => {
     try {
       await broadcastListener.startListening(
         async (message: string, senderInfo: any) => {
           try {
-            // Utiliser extractSenderAndBody de main
             const { sender: parsedSender, body } = extractSenderAndBody(message);
-            
+            let finalMessage = body;
+            let isEncrypted = false;
+            let decryptionFailed = false;
+
+            // Vérifier si le message est chiffré
+            if (cryptoService.isEncryptedMessage(body) && this.state.userPassword) {
+              const encryptedData = cryptoService.parseEncryptedMessage(body);
+              if (encryptedData) {
+                isEncrypted = true;
+                const decryptionResult = cryptoService.decryptMessage(
+                  encryptedData,
+                  this.state.userPassword
+                );
+
+                if (decryptionResult.success) {
+                  finalMessage = decryptionResult.message!;
+                } else {
+                  finalMessage = `🔒 [Encrypted message - wrong password]`;
+                  decryptionFailed = true;
+                }
+              }
+            } else if (cryptoService.isEncryptedMessage(body)) {
+              finalMessage = `🔒 [Encrypted message - no password set]`;
+              isEncrypted = true;
+              decryptionFailed = true;
+            }
+
             // Sauvegarder en base avec SQLite
             const messageId = await sqliteService.saveMessage({
-              message: body, // Utiliser body au lieu de message
+              message: finalMessage,
               timestamp: this.formatHHMM(new Date()),
               sender: parsedSender || senderInfo?.username || senderInfo?.name || senderInfo?.address || 'Unknown',
               isSent: false,
               senderIp: senderInfo.address,
+              isEncrypted,
+              decryptionFailed,
             });
 
             // Créer le message pour l'état
             const newMessage: Message = {
               _id: messageId,
-              message: body,
+              message: finalMessage,
               timestamp: this.formatHHMM(new Date()),
               sender: parsedSender || senderInfo?.username || senderInfo?.name || senderInfo?.address || 'Unknown',
               isSent: false,
               senderIp: senderInfo.address,
+              isEncrypted,
+              decryptionFailed,
             };
 
             this.setState((prev) => ({
@@ -247,43 +389,13 @@ class App extends Component<{}, AppState> {
     this.setState({ activeTab: index });
   };
 
-  sendMsg = async () => {
-    if (this.state.inputText.trim()) {
-      try {
-        // Sauvegarder en base de données
-        const messageId = await sqliteService.saveMessage({
-          message: this.state.inputText.trim(),
-          timestamp: this.formatHHMM(new Date()),
-          sender: 'You',
-          isSent: true,
-        });
-
-        // Créer le message pour l'état
-        const sentMessage: Message = {
-          _id: messageId,
-          message: this.state.inputText.trim(),
-          timestamp: this.formatHHMM(new Date()),
-          sender: 'You',
-          isSent: true,
-        };
-
-        this.setState((prev) => ({
-          receivedMessages: [...prev.receivedMessages, sentMessage],
-        }));
-
-        await broadcastListener.sendBroadcast(
-          this.state.inputText.trim(),
-          this.state.username.trim(),
-        );
-      } catch (error) {
-        console.error('Failed to broadcast message:', error);
-        Alert.alert('Error', 'Failed to send broadcast message');
-      }
-    }
-    this.setState({ inputText: '' });
+  onTextChange = (text: string) => {
+    this.setState({ inputText: text });
   };
 
-  onTextChange = (text: string) => this.setState({ inputText: text });
+  onRecipientPasswordChange = (password: string) => {
+    this.setState({ recipientPassword: password });
+  };
 
   renderBroadcastTab = () => (
     <AppContent
@@ -296,6 +408,13 @@ class App extends Component<{}, AppState> {
       ownIpAddress={this.state.ownIpAddress}
       onOpenSettings={this.toggleSettings}
       username={this.state.username}
+      // AJOUTER: Props crypto manquantes
+      encryptionMode={this.state.encryptionMode}
+      recipientPassword={this.state.recipientPassword}
+      onToggleEncryption={this.toggleEncryptionMode}
+      onOpenEncryptionSettings={this.openEncryptionSettings}
+      onRecipientPasswordChange={this.onRecipientPasswordChange}
+      userPassword={this.state.userPassword}
     />
   );
 
@@ -327,6 +446,12 @@ class App extends Component<{}, AppState> {
               onClose={this.toggleSettings}
               onSave={this.saveUsername}
             />
+            <EncryptionSettingsModal
+              visible={this.state.showEncryptionSettings}
+              userPassword={this.state.userPassword}
+              onClose={this.closeEncryptionSettings}
+              onSave={this.saveUserPassword}
+            />
           </ThemeProvider>
         </PaperProvider>
       </SafeAreaProvider>
@@ -344,6 +469,13 @@ const AppContent: React.FC<{
   ownIpAddress: string | null;
   onOpenSettings: () => void;
   username: string;
+  // AJOUTER: Props crypto
+  encryptionMode: boolean;
+  recipientPassword: string;
+  onToggleEncryption: () => void;
+  onOpenEncryptionSettings: () => void;
+  onRecipientPasswordChange: (password: string) => void;
+  userPassword: string;
 }> = ({
   inputText,
   onTextChange,
@@ -354,6 +486,13 @@ const AppContent: React.FC<{
   ownIpAddress,
   onOpenSettings,
   username,
+  // AJOUTER: Destructuring crypto
+  encryptionMode,
+  recipientPassword,
+  onToggleEncryption,
+  onOpenEncryptionSettings,
+  onRecipientPasswordChange,
+  userPassword,
 }) => {
   const theme = useMaterialYouTheme();
   const [keyboardVisible, setKeyboardVisible] = React.useState(false);
@@ -407,6 +546,35 @@ const AppContent: React.FC<{
     clearButton: { marginTop: 10, backgroundColor: theme.card },
     clearButtonLabel: { color: theme.text },
     ipText: { color: theme.text, fontSize: 12, opacity: 0.7 },
+    // AJOUTER: Styles crypto
+    encryptionContainer: {
+      paddingHorizontal: 20,
+      paddingVertical: 10,
+      backgroundColor: theme.card,
+      marginHorizontal: 20,
+      borderRadius: 8,
+      marginBottom: 10,
+      borderLeftWidth: 3,
+      borderLeftColor: theme.primary,
+    },
+    encryptionLabel: {
+      color: theme.primary,
+      fontSize: 12,
+      fontWeight: 'bold',
+      marginBottom: 8,
+      textAlign: 'center',
+    },
+    encryptionInput: {
+      backgroundColor: theme.background,
+      fontSize: 14,
+    },
+    encryptionStatus: {
+      color: theme.text,
+      fontSize: 11,
+      opacity: 0.7,
+      textAlign: 'center',
+      marginTop: 5,
+    },
   });
 
   const scrollViewRef = useRef<ScrollView | null>(null);
@@ -500,6 +668,32 @@ const AppContent: React.FC<{
         </ScrollView>
       </View>
 
+      {/* AJOUTER: Interface de chiffrement */}
+      {encryptionMode && (
+        <View style={styles.encryptionContainer}>
+          <PaperText style={styles.encryptionLabel}>🔒 ENCRYPTION MODE ACTIVE</PaperText>
+          <TextInput
+            mode="outlined"
+            label="Recipient's password"
+            value={recipientPassword}
+            onChangeText={onRecipientPasswordChange}
+            style={styles.encryptionInput}
+            secureTextEntry
+            placeholder="Enter recipient's password to encrypt"
+            textColor={theme.text}
+            outlineColor={theme.primary}
+            activeOutlineColor={theme.primary}
+            dense
+          />
+          <PaperText style={styles.encryptionStatus}>
+            {userPassword ? 
+              `✅ Your password set | ${recipientPassword ? '🔒 Ready to encrypt' : '⚠️ Enter recipient password'}` 
+              : '⚠️ Set your password in settings to decrypt messages'
+            }
+          </PaperText>
+        </View>
+      )}
+
       <View style={styles.inputContainer}>
         <TextInput
           mode="outlined"
@@ -510,19 +704,40 @@ const AppContent: React.FC<{
           textColor={theme.text}
           outlineColor={theme.primary}
           activeOutlineColor={theme.primary}
-          placeholder={username ? `${username}: Enter your message...` : 'Enter your message...'}
+          placeholder={
+            encryptionMode 
+              ? `🔒 ${username}: Encrypted message...` 
+              : username ? `${username}: Enter your message...` : 'Enter your message...'
+          }
           onFocus={() => {
             if (autoScroll) {
               requestAnimationFrame(() => scrollViewRef.current?.scrollToEnd({ animated: true }));
             }
           }}
         />
+        
+        {/* AJOUTER: Boutons crypto */}
+        <IconButton
+          icon={encryptionMode ? "lock" : "lock-open"}
+          onPress={onToggleEncryption}
+          iconColor={encryptionMode ? theme.primary : theme.text}
+          size={20}
+          style={{ opacity: encryptionMode ? 1 : 0.7 }}
+        />
+        
+        <IconButton
+          icon="key"
+          onPress={onOpenEncryptionSettings}
+          iconColor={theme.primary}
+          size={20}
+        />
+
         <IconButton
           icon="send"
           onPress={sendMsg}
           iconColor={theme.textColored}
           containerColor={theme.primary}
-          disabled={!inputText.trim()}
+          disabled={!inputText.trim() || (encryptionMode && !recipientPassword.trim())}
           size={24}
         />
       </View>
@@ -672,6 +887,127 @@ const SettingsModal: React.FC<{
               </Button>
             </View>
           </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+};
+
+const EncryptionSettingsModal: React.FC<{
+  visible: boolean;
+  userPassword: string;
+  onClose: () => void;
+  onSave: (password: string) => void;
+}> = ({ visible, userPassword, onClose, onSave }) => {
+  const [tempPassword, setTempPassword] = React.useState(userPassword);
+  const [confirmPassword, setConfirmPassword] = React.useState('');
+  const theme = useMaterialYouTheme();
+
+  useEffect(() => {
+    setTempPassword(userPassword);
+    setConfirmPassword('');
+  }, [userPassword, visible]);
+
+  const handleSave = () => {
+    if (tempPassword !== confirmPassword) {
+      Alert.alert('Error', 'Passwords do not match');
+      return;
+    }
+    if (tempPassword.length < 6) {
+      Alert.alert('Error', 'Password must be at least 6 characters');
+      return;
+    }
+    onSave(tempPassword);
+    onClose();
+  };
+
+  const modalStyles = StyleSheet.create({
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 20,
+    },
+    modalContent: {
+      backgroundColor: theme.background,
+      padding: 20,
+      margin: 0,
+      borderRadius: 10,
+      width: '90%',
+      maxWidth: 420,
+    },
+    modalTitle: {
+      fontSize: 20,
+      fontWeight: 'bold',
+      color: theme.text,
+      marginBottom: 20,
+      textAlign: 'center',
+    },
+    input: { marginBottom: 15, backgroundColor: theme.card },
+    buttonContainer: { flexDirection: 'row', justifyContent: 'space-between', gap: 10, marginTop: 10 },
+    button: { flex: 1 },
+    infoText: {
+      color: theme.text,
+      fontSize: 12,
+      opacity: 0.7,
+      textAlign: 'center',
+      marginBottom: 20,
+      lineHeight: 16,
+    },
+  });
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={modalStyles.modalOverlay}>
+        <View style={modalStyles.modalContent}>
+          <PaperText style={modalStyles.modalTitle}>🔐 Encryption Settings</PaperText>
+          
+          <PaperText style={modalStyles.infoText}>
+            Set your encryption password. Others need this password to send you encrypted messages.
+          </PaperText>
+
+          <TextInput
+            mode="outlined"
+            label="Your encryption password"
+            value={tempPassword}
+            onChangeText={setTempPassword}
+            style={modalStyles.input}
+            secureTextEntry
+            textColor={theme.text}
+            outlineColor={theme.primary}
+            activeOutlineColor={theme.primary}
+            placeholder="Enter a strong password"
+          />
+
+          <TextInput
+            mode="outlined"
+            label="Confirm password"
+            value={confirmPassword}
+            onChangeText={setConfirmPassword}
+            style={modalStyles.input}
+            secureTextEntry
+            textColor={theme.text}
+            outlineColor={theme.primary}
+            activeOutlineColor={theme.primary}
+            placeholder="Confirm your password"
+          />
+
+          <View style={modalStyles.buttonContainer}>
+            <Button mode="outlined" onPress={onClose} style={modalStyles.button}>
+              Cancel
+            </Button>
+            <Button
+              mode="contained"
+              onPress={handleSave}
+              style={modalStyles.button}
+              buttonColor={theme.primary}
+              textColor={theme.textColored}
+              disabled={!tempPassword.trim() || tempPassword !== confirmPassword}
+            >
+              Save
+            </Button>
+          </View>
         </View>
       </View>
     </Modal>
