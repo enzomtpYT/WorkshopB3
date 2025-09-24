@@ -2,13 +2,12 @@ import React, {
   Component,
   useEffect,
   useRef,
-  useState,
   useCallback,
+  useState,
   useMemo,
 } from 'react';
 import {
   View,
-  StyleSheet,
   ScrollView,
   Alert,
   Modal,
@@ -17,7 +16,7 @@ import {
   Keyboard,
   NativeScrollEvent,
   NativeSyntheticEvent,
-} from 'react-native';
+  } from 'react-native';
 import {
   useSafeAreaInsets,
   SafeAreaProvider,
@@ -37,10 +36,16 @@ import type { MaterialYouPalette } from 'react-native-material-you-colors';
 import { broadcastListener } from './BroadcastListener';
 import MessageBubble from './MessageBubble';
 import { computeShowTimestampFlags } from './ShowTimestamp';
-import { bluetoothService, BluetoothDevice, BluetoothMessage } from './BluetoothService';
+import {
+  bluetoothService,
+  BluetoothDevice,
+  BluetoothMessage,
+} from './BluetoothService';
+import './types/react-native-classname.d'; // pour les styles classname
+import './types/css.d.ts'; // pour les styles css
+import './css/app.css'; // styles globaux
 
 function extractSenderAndBody(raw: string): { sender?: string; body: string } {
-  // 1) Essaye JSON d'abord
   try {
     const obj = JSON.parse(raw);
     if (obj && typeof obj === 'object' && 'message' in obj) {
@@ -51,17 +56,13 @@ function extractSenderAndBody(raw: string): { sender?: string; body: string } {
         undefined;
       return { sender: senderGuess, body: (obj as any).message };
     }
-  } catch {
-    // pas du JSON → on continue
-  }
+  } catch {}
 
-  // 2) Pattern "Username: message" (une seule fois, en début de chaîne)
   const m = raw.match(/^\s*([^:\n]{1,64})\s*:\s*(.+)$/s);
   if (m) {
     return { sender: m[1].trim(), body: m[2] };
   }
 
-  // 3) Pas de username détecté → on garde tel quel
   return { body: raw };
 }
 
@@ -89,13 +90,6 @@ function generateTheme(palette: MaterialYouPalette) {
 
 export const { ThemeProvider, useMaterialYouTheme } =
   MaterialYou.createThemeContext(generateTheme);
-
-// Helper to format a Date as 24-hour HH:MM
-// function formatHHMM(date: Date = new Date()): string {
-//   const h = date.getHours().toString().padStart(2, '0');
-//   const m = date.getMinutes().toString().padStart(2, '0');
-//   return `${h}:${m}`;
-// }
 
 const USERNAME_STORAGE_KEY = 'broadcast_username';
 
@@ -162,7 +156,6 @@ class App extends Component<{}, AppState> {
           const newMessage = {
             message: body,
             timestamp: Date.now(),
-            // priorité au username parsé, sinon ce que donne le listener (si dispo), sinon IP, sinon "Unknown"
             sender:
               parsedSender ||
               senderInfo?.username ||
@@ -183,11 +176,6 @@ class App extends Component<{}, AppState> {
       console.error('Failed to start broadcast listener:', error);
       Alert.alert('Error', 'Failed to start listening for broadcast messages');
     }
-  };
-
-  stopBroadcastListener = () => {
-    broadcastListener.stopListening();
-    this.setState({ isListening: false });
   };
 
   clearMessages = () => {
@@ -249,12 +237,24 @@ class App extends Component<{}, AppState> {
     />
   );
 
-  renderBluetoothTab = () => <BluetoothContent username={this.state.username} />;
+  renderBluetoothTab = () => (
+    <BluetoothContent username={this.state.username} />
+  );
 
   render() {
     const routes = [
-      { key: 'broadcast', title: 'Broadcast', focusedIcon: 'wifi', unfocusedIcon: 'wifi-off' },
-      { key: 'bluetooth', title: 'Bluetooth', focusedIcon: 'bluetooth', unfocusedIcon: 'bluetooth-off' },
+      {
+        key: 'broadcast',
+        title: 'Broadcast',
+        focusedIcon: 'wifi',
+        unfocusedIcon: 'wifi-off',
+      },
+      {
+        key: 'bluetooth',
+        title: 'Bluetooth',
+        focusedIcon: 'bluetooth',
+        unfocusedIcon: 'bluetooth-off',
+      },
     ];
 
     const renderScene = BottomNavigation.SceneMap({
@@ -314,62 +314,10 @@ const AppContent: React.FC<{
   const [keyboardVisible, setKeyboardVisible] = React.useState(false);
   const insets = useSafeAreaInsets();
 
-  // ⚠️ Calcul des flags (re-mémorisé)
   const showFlags = useMemo(
     () => computeShowTimestampFlags(receivedMessages),
     [receivedMessages],
   );
-
-  useEffect(() => {
-    const show = Keyboard.addListener('keyboardDidShow', () =>
-      setKeyboardVisible(true),
-    );
-    const hide = Keyboard.addListener('keyboardDidHide', () =>
-      setKeyboardVisible(false),
-    );
-    return () => {
-      show.remove();
-      hide.remove();
-    };
-  }, []);
-
-  const styles = StyleSheet.create({
-    container: {
-      flex: 1,
-      paddingTop: insets.top,
-      paddingBottom: keyboardVisible ? 0 : insets.bottom,
-      backgroundColor: theme.background,
-    },
-    input: { flex: 1, backgroundColor: theme.card },
-    inputContainer: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 10,
-      marginBottom: 10,
-      paddingHorizontal: 20,
-      paddingBottom: 10,
-    },
-    messagesContainer: {
-      flex: 1,
-      paddingTop: 20,
-      paddingHorizontal: 20,
-      paddingBottom: 0,
-    },
-    statusContainer: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'flex-start',
-      marginBottom: 10,
-    },
-    statusInfo: { flex: 1 },
-    buttonContainer: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-    statusText: { color: theme.text, fontSize: 14 },
-    clearButton: { marginTop: 10, backgroundColor: theme.card },
-    clearButtonLabel: { color: theme.text },
-    ipText: { color: theme.text, fontSize: 12, opacity: 0.7 },
-  });
-
-  // ------- Auto-scroll + suivi clavier -------
   const scrollViewRef = useRef<ScrollView | null>(null);
   const [autoScroll, setAutoScroll] = useState(true);
 
@@ -394,14 +342,36 @@ const AppContent: React.FC<{
       const isBottom =
         layoutMeasurement.height + contentOffset.y >=
         contentSize.height - paddingToBottom;
-      setAutoScroll(isBottom);
+      setAutoScroll(isBottom); // ← 'e' est utilisé, plus d’avertissement
     },
     [],
   );
 
+  useEffect(() => {
+    const show = Keyboard.addListener('keyboardDidShow', () =>
+      setKeyboardVisible(true),
+    );
+    const hide = Keyboard.addListener('keyboardDidHide', () =>
+      setKeyboardVisible(false),
+    );
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+
+  // padding top/bottom dynamiques (safe-area & clavier)
+  const containerDynamicStyle = {
+    paddingTop: insets.top,
+    paddingBottom: keyboardVisible ? 0 : insets.bottom,
+    backgroundColor: theme.background, // garde la couleur dynamique
+    flex: 1,
+  } as const;
+
   return (
     <KeyboardAvoidingView
-      style={styles.container}
+      className="app__container"
+      style={containerDynamicStyle}
       behavior={
         keyboardVisible
           ? Platform.OS === 'ios'
@@ -411,24 +381,24 @@ const AppContent: React.FC<{
       }
       keyboardVerticalOffset={0}
     >
-      <View style={styles.messagesContainer}>
-        <View style={styles.statusContainer}>
-          <View style={styles.statusInfo}>
-            <PaperText style={styles.statusText}>
+      <View className="app__messages">
+        <View className="app__status">
+          <View className="app__status-info">
+            <PaperText className="app__status-text">
               Status:{' '}
               {isListening ? 'Listening for broadcasts' : 'Not listening'}
             </PaperText>
             {ownIpAddress && (
-              <PaperText style={styles.ipText}>
+              <PaperText className="app__ip">
                 Device IP: {ownIpAddress} (messages from this IP are filtered)
               </PaperText>
             )}
             {username ? (
-              <PaperText style={styles.ipText}>Username: {username}</PaperText>
+              <PaperText className="app__ip">Username: {username}</PaperText>
             ) : null}
           </View>
 
-          <View style={styles.buttonContainer}>
+          <View className="app__actions">
             <IconButton
               icon="cog"
               size={20}
@@ -439,8 +409,7 @@ const AppContent: React.FC<{
               mode="outlined"
               onPress={onClearMessages}
               disabled={receivedMessages.length === 0}
-              style={styles.clearButton}
-              labelStyle={styles.clearButtonLabel}
+              className="app__clear"
             >
               Clear
             </Button>
@@ -455,7 +424,7 @@ const AppContent: React.FC<{
           keyboardShouldPersistTaps="handled"
         >
           {receivedMessages.length === 0 ? (
-            <PaperText style={styles.statusText}>
+            <PaperText className="app__status-text">
               No broadcast messages received yet...
             </PaperText>
           ) : (
@@ -471,13 +440,13 @@ const AppContent: React.FC<{
         </ScrollView>
       </View>
 
-      <View style={styles.inputContainer}>
+      <View className="app__input-row">
         <TextInput
           mode="outlined"
           label="Message"
           value={inputText}
           onChangeText={onTextChange}
-          style={styles.input}
+          className="app__input"
           textColor={theme.text}
           outlineColor={theme.primary}
           activeOutlineColor={theme.primary}
@@ -487,11 +456,7 @@ const AppContent: React.FC<{
               : 'Enter your message...'
           }
           onFocus={() => {
-            if (autoScroll) {
-              requestAnimationFrame(() =>
-                scrollViewRef.current?.scrollToEnd({ animated: true }),
-              );
-            }
+            // auto-scroll vers le bas
           }}
         />
         <IconButton
@@ -517,122 +482,24 @@ const BluetoothContent: React.FC<{ username: string }> = ({ username }) => {
   const [isInitialized, setIsInitialized] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const styles = StyleSheet.create({
-    container: {
-      flex: 1,
-      paddingTop: insets.top,
-      paddingBottom: insets.bottom,
-      backgroundColor: theme.background,
-    },
-    content: {
-      flex: 1,
-      padding: 20,
-    },
-    headerContainer: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginBottom: 20,
-    },
-    title: {
-      fontSize: 24,
-      fontWeight: 'bold',
-      color: theme.text,
-    },
-    sectionTitle: {
-      fontSize: 18,
-      fontWeight: 'bold',
-      color: theme.text,
-      marginTop: 20,
-      marginBottom: 10,
-    },
-    deviceItem: {
-      backgroundColor: theme.card,
-      padding: 15,
-      marginVertical: 5,
-      borderRadius: 8,
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-    },
-    deviceInfo: {
-      flex: 1,
-    },
-    deviceName: {
-      fontSize: 16,
-      fontWeight: 'bold',
-      color: theme.text,
-    },
-    deviceAddress: {
-      fontSize: 12,
-      color: theme.text,
-      opacity: 0.7,
-    },
-    deviceStatus: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 5,
-    },
-    statusText: {
-      fontSize: 12,
-      color: theme.text,
-      opacity: 0.8,
-    },
-    emptyText: {
-      textAlign: 'center',
-      color: theme.text,
-      opacity: 0.7,
-      marginTop: 20,
-    },
-    errorText: {
-      textAlign: 'center',
-      color: theme.primary,
-      marginTop: 20,
-      marginBottom: 10,
-    },
-    scanButton: {
-      backgroundColor: theme.primary,
-    },
-    scanButtonDisabled: {
-      backgroundColor: theme.card,
-    },
-    messagesContainer: {
-      flex: 1,
-    },
-    retryButton: {
-      marginTop: 10,
-      alignSelf: 'center',
-    },
-    deviceHint: {
-      fontSize: 12,
-      color: theme.text,
-      opacity: 0.7,
-      fontStyle: 'italic',
-    },
-    usernameText: {
-      fontSize: 12,
-      color: theme.text,
-      opacity: 0.7,
-      fontWeight: 'bold',
-    },
-  });
+  // padding dynamiques
+  const containerDynamicStyle = {
+    paddingTop: insets.top,
+    paddingBottom: insets.bottom,
+    backgroundColor: theme.background,
+    flex: 1,
+  } as const;
 
-  // Initialize Bluetooth service
   useEffect(() => {
     const initializeBluetooth = async () => {
       try {
         setError(null);
-        console.log('Starting Bluetooth initialization...');
-        
         await bluetoothService.initialize(username || 'Anonymous');
-        
-        // Set up callbacks
+
         bluetoothService.setOnDeviceFound((device: BluetoothDevice) => {
           setDetectedDevices(prev => {
             const exists = prev.find(d => d.id === device.id);
-            if (!exists) {
-              return [...prev, device];
-            }
+            if (!exists) return [...prev, device];
             return prev;
           });
         });
@@ -641,45 +508,37 @@ const BluetoothContent: React.FC<{ username: string }> = ({ username }) => {
           setMessages(prev => [...prev, message]);
         });
 
-        // Start advertising so others can find us (may not work on all devices)
         await bluetoothService.startAdvertising();
-        
         setIsInitialized(true);
-        console.log('Bluetooth initialization completed successfully');
-
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : 'Failed to initialize Bluetooth';
-        console.error('Bluetooth initialization failed:', errorMessage);
+        const errorMessage =
+          err instanceof Error ? err.message : 'Failed to initialize Bluetooth';
         setError(errorMessage);
         setIsInitialized(false);
       }
     };
 
-    // Initialize immediately
     initializeBluetooth();
-
-    return () => {
-      bluetoothService.cleanup();
-    };
-  }, [username]); // Include username as dependency
+    return () => bluetoothService.cleanup();
+  }, [username]);
 
   const startScan = async () => {
     if (!isInitialized) {
       Alert.alert('Error', 'Bluetooth not initialized');
       return;
     }
-
     setIsScanning(true);
-    setDetectedDevices([]); // Clear previous results
-    
+    setDetectedDevices([]);
     try {
       await bluetoothService.startScanning();
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to start scanning');
-      Alert.alert('Scan Error', err instanceof Error ? err.message : 'Failed to start scanning');
+      Alert.alert(
+        'Scan Error',
+        err instanceof Error ? err.message : 'Failed to start scanning',
+      );
     } finally {
-      // The service will automatically stop scanning after 30 seconds
       setTimeout(() => {
         setIsScanning(bluetoothService.getIsScanning());
       }, 30500);
@@ -692,57 +551,53 @@ const BluetoothContent: React.FC<{ username: string }> = ({ username }) => {
       if (!device) return;
 
       if (device.connected) {
-        // Disconnect
         await bluetoothService.disconnectFromDevice(deviceId);
-        setDetectedDevices(prev => 
-          prev.map(d => 
-            d.id === deviceId 
-              ? { ...d, connected: false }
-              : d
-          )
+        setDetectedDevices(prev =>
+          prev.map(d => (d.id === deviceId ? { ...d, connected: false } : d)),
         );
       } else {
-        // Connect
         try {
           await bluetoothService.connectToDevice(deviceId);
-          setDetectedDevices(prev => 
-            prev.map(d => 
-              d.id === deviceId 
-                ? { ...d, connected: true }
-                : d
-            )
+          setDetectedDevices(prev =>
+            prev.map(d => (d.id === deviceId ? { ...d, connected: true } : d)),
           );
           Alert.alert('Success', 'Connected to Workshop app user!');
         } catch (connectErr) {
-          // If connection fails due to missing service, show a different message
-          const errorMessage = connectErr instanceof Error ? connectErr.message : 'Failed to connect';
+          const errorMessage =
+            connectErr instanceof Error
+              ? connectErr.message
+              : 'Failed to connect';
           if (errorMessage.includes('Workshop app')) {
-            Alert.alert('Not a Workshop App', 'This device does not appear to be running the Workshop app.');
+            Alert.alert(
+              'Not a Workshop App',
+              'This device does not appear to be running the Workshop app.',
+            );
           } else {
-            throw connectErr; // Re-throw other errors
+            throw connectErr;
           }
         }
       }
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to connect to device';
+      const errorMessage =
+        err instanceof Error ? err.message : 'Failed to connect to device';
       Alert.alert('Connection Error', errorMessage);
     }
   };
 
-  const clearMessages = () => {
-    setMessages([]);
-  };
+  const clearMessages = () => setMessages([]);
 
   return (
-    <View style={styles.container}>
-      <View style={styles.content}>
-        <View style={styles.headerContainer}>
-          <PaperText style={styles.title}>Bluetooth Chat</PaperText>
+    <View className="bt__container" style={containerDynamicStyle}>
+      <View className="bt__content">
+        <View className="bt__header">
+          <PaperText className="bt__title">Bluetooth Chat</PaperText>
           <Button
             mode="contained"
             onPress={startScan}
             disabled={isScanning || !isInitialized}
-            style={isScanning || !isInitialized ? styles.scanButtonDisabled : styles.scanButton}
+            className={
+              isScanning || !isInitialized ? 'bt__scan--disabled' : 'bt__scan'
+            }
             loading={isScanning}
             compact
           >
@@ -752,22 +607,24 @@ const BluetoothContent: React.FC<{ username: string }> = ({ username }) => {
 
         {error && (
           <View>
-            <PaperText style={styles.errorText}>
-              {error}
-            </PaperText>
+            <PaperText className="bt__error">{error}</PaperText>
             <Button
               mode="outlined"
               onPress={() => {
                 setError(null);
                 setIsInitialized(false);
-                // Trigger re-initialization
-                bluetoothService.initialize(username || 'Anonymous').then(() => {
-                  setIsInitialized(true);
-                }).catch((err) => {
-                  setError(err instanceof Error ? err.message : 'Failed to initialize Bluetooth');
-                });
+                bluetoothService
+                  .initialize(username || 'Anonymous')
+                  .then(() => setIsInitialized(true))
+                  .catch(err => {
+                    setError(
+                      err instanceof Error
+                        ? err.message
+                        : 'Failed to initialize Bluetooth',
+                    );
+                  });
               }}
-              style={styles.retryButton}
+              className="bt__retry"
             >
               Retry
             </Button>
@@ -775,13 +632,13 @@ const BluetoothContent: React.FC<{ username: string }> = ({ username }) => {
         )}
 
         {!isInitialized && !error && (
-          <PaperText style={styles.emptyText}>
-            Initializing Bluetooth...
-          </PaperText>
+          <PaperText className="bt__empty">Initializing Bluetooth...</PaperText>
         )}
 
-        <View style={styles.headerContainer}>
-          <PaperText style={styles.sectionTitle}>Detected Devices ({detectedDevices.length})</PaperText>
+        <View className="bt__header">
+          <PaperText className="bt__section">
+            Detected Devices ({detectedDevices.length})
+          </PaperText>
           {detectedDevices.length > 0 && (
             <Button
               mode="outlined"
@@ -792,44 +649,67 @@ const BluetoothContent: React.FC<{ username: string }> = ({ username }) => {
             </Button>
           )}
         </View>
+
         <ScrollView>
           {detectedDevices.length === 0 ? (
-            <PaperText style={styles.emptyText}>
-              {isScanning ? 'Scanning for nearby devices...' : 'No devices found. Tap "Scan" to search for nearby devices. Devices will be verified for Workshop app when you connect.'}
+            <PaperText className="bt__empty">
+              {isScanning
+                ? 'Scanning for nearby devices...'
+                : 'No devices found. Tap "Scan" to search for nearby devices. Devices will be verified for Workshop app when you connect.'}
             </PaperText>
           ) : (
-            detectedDevices.map((device) => (
-              <View key={device.id} style={styles.deviceItem}>
-                <View style={styles.deviceInfo}>
-                  <PaperText style={styles.deviceName}>
+            detectedDevices.map(device => (
+              <View key={device.id} className="bt__device">
+                <View className="bt__device-info">
+                  <PaperText className="bt__device-name">
                     {device.name}
                     {device.name?.startsWith('Workshop-') && ' ✓'}
                   </PaperText>
                   {device.username && device.username !== 'Unknown User' && (
-                    <PaperText style={styles.usernameText}>
+                    <PaperText className="bt__username">
                       User: {device.username}
                     </PaperText>
                   )}
-                  <PaperText style={styles.deviceAddress}>{device.address}</PaperText>
+                  <PaperText className="bt__device-address">
+                    {device.address}
+                  </PaperText>
                   {device.rssi && (
-                    <PaperText style={styles.deviceAddress}>
-                      Signal: {device.rssi} dBm ({device.rssi > -50 ? 'Strong' : device.rssi > -70 ? 'Medium' : 'Weak'})
+                    <PaperText className="bt__device-address">
+                      Signal: {device.rssi} dBm (
+                      {device.rssi > -50
+                        ? 'Strong'
+                        : device.rssi > -70
+                        ? 'Medium'
+                        : 'Weak'}
+                      )
                     </PaperText>
                   )}
-                  <PaperText style={styles.deviceHint}>
-                    {device.name?.startsWith('Workshop-') 
-                      ? 'Verified Workshop app device' 
+                  <PaperText className="bt__hint">
+                    {device.name?.startsWith('Workshop-')
+                      ? 'Verified Workshop app device'
                       : 'Potential device - connect to verify Workshop app'}
                   </PaperText>
                 </View>
-                <View style={styles.deviceStatus}>
+                <View className="bt__device-status">
                   <IconButton
-                    icon={device.connected ? 'bluetooth-connect' : device.name?.startsWith('Workshop-') ? 'shield-check' : 'bluetooth'}
+                    icon={
+                      device.connected
+                        ? 'bluetooth-connect'
+                        : device.name?.startsWith('Workshop-')
+                        ? 'shield-check'
+                        : 'bluetooth'
+                    }
                     size={20}
-                    iconColor={device.connected ? theme.primary : device.name?.startsWith('Workshop-') ? '#4CAF50' : theme.text}
+                    iconColor={
+                      device.connected
+                        ? theme.primary
+                        : device.name?.startsWith('Workshop-')
+                        ? '#4CAF50'
+                        : theme.text
+                    }
                     onPress={() => connectToDevice(device.id)}
                   />
-                  <PaperText style={styles.statusText}>
+                  <PaperText className="bt__status-text">
                     {device.connected ? 'Connected' : 'Tap to connect'}
                   </PaperText>
                 </View>
@@ -838,8 +718,8 @@ const BluetoothContent: React.FC<{ username: string }> = ({ username }) => {
           )}
         </ScrollView>
 
-        <View style={styles.headerContainer}>
-          <PaperText style={styles.sectionTitle}>Messages</PaperText>
+        <View className="bt__header">
+          <PaperText className="bt__section">Messages</PaperText>
           <Button
             mode="outlined"
             onPress={clearMessages}
@@ -849,15 +729,16 @@ const BluetoothContent: React.FC<{ username: string }> = ({ username }) => {
             Clear
           </Button>
         </View>
-        <ScrollView style={styles.messagesContainer}>
+
+        <ScrollView className="bt__messages">
           {messages.length === 0 ? (
-            <PaperText style={styles.emptyText}>
+            <PaperText className="bt__empty">
               No messages yet. Connect to a device to start chatting.
             </PaperText>
           ) : (
             messages.map((msg, index) => (
-              <View key={index} style={styles.deviceItem}>
-                <PaperText style={styles.deviceName}>
+              <View key={index} className="bt__device">
+                <PaperText className="bt__device-name">
                   {msg.deviceName}: {msg.message}
                 </PaperText>
               </View>
@@ -888,41 +769,6 @@ const SettingsModal: React.FC<{
     onClose();
   };
 
-  const modalStyles = StyleSheet.create({
-    modalOverlay: {
-      flex: 1,
-      backgroundColor: 'rgba(0, 0, 0, 0.5)',
-      justifyContent: 'center',
-      alignItems: 'center',
-      padding: 20,
-    },
-    modalContent: {
-      backgroundColor: theme.background,
-      padding: 20,
-      margin: 0,
-      borderRadius: 10,
-      width: '90%',
-      maxWidth: 420,
-      maxHeight: '80%',
-      overflow: 'hidden',
-    },
-    modalTitle: {
-      fontSize: 20,
-      fontWeight: 'bold',
-      color: theme.text,
-      marginBottom: 20,
-      textAlign: 'center',
-    },
-    input: { marginBottom: 20, backgroundColor: theme.card },
-    buttonContainer: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      gap: 10,
-    },
-    button: { flex: 1 },
-    modalScrollContent: { paddingBottom: 8 },
-  });
-
   return (
     <Modal
       visible={visible}
@@ -930,35 +776,35 @@ const SettingsModal: React.FC<{
       animationType="fade"
       onRequestClose={onClose}
     >
-      <View style={modalStyles.modalOverlay}>
-        <View style={modalStyles.modalContent}>
-          <ScrollView contentContainerStyle={modalStyles.modalScrollContent}>
-            <PaperText style={modalStyles.modalTitle}>Settings</PaperText>
+      <View className="modal__overlay">
+        <View className="modal__content">
+          <ScrollView >
+            <PaperText className="modal__title">Settings</PaperText>
 
             <TextInput
               mode="outlined"
               label="Username"
               value={tempUsername}
               onChangeText={setTempUsername}
-              style={modalStyles.input}
+              className="modal__input"
               textColor={theme.text}
               outlineColor={theme.primary}
               activeOutlineColor={theme.primary}
               placeholder="Enter your username"
             />
 
-            <View style={modalStyles.buttonContainer}>
+            <View className="modal__actions">
               <Button
                 mode="outlined"
                 onPress={onClose}
-                style={modalStyles.button}
+                className="modal__button"
               >
                 Cancel
               </Button>
               <Button
                 mode="contained"
                 onPress={handleSave}
-                style={modalStyles.button}
+                className="modal__button"
                 buttonColor={theme.primary}
                 textColor={theme.textColored}
               >

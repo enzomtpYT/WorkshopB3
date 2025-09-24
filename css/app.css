@@ -5,7 +5,7 @@
   --color-text-colored: #FFFFFF;
   --color-bg: #FFFBFE;
   --color-card: #EADDFF;
-  --color-icon: #1D1B20;
+  --color-icon: #1D1B20; /* DEPRECATED: plus utilisé dans le thème */
   --radius-md: 10px;
   --radius-lg: 16px;
   --space-1: 4px;
@@ -29,7 +29,7 @@
   --color-text-colored: #0B0B0B;
   --color-bg: #1C1B1F;
   --color-card: #313033;
-  --color-icon: #E6E1E5;
+  --color-icon: #E6E1E5; /* DEPRECATED */
 }
 
 .u-container {
@@ -165,119 +165,41 @@
 
 .bt__content {
   flex: 1;
-  padding: var(--space-5);
-}
-
-.bt__header {
+  padding: 20px;
   display: flex;
-  flex-direction: row;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-  margin-bottom: var(--space-5);
+  justify-content: center;
+  text-align: center;
 }
 
 .bt__title {
   font-size: 24px;
   color: var(--color-text);
   font-weight: 700;
+  margin-bottom: 20px;
 }
 
-.bt__section {
-  font-size: 18px;
-  color: var(--color-text);
-  font-weight: 700;
-  margin-top: 20px;
-  margin-bottom: 10px;
-}
-
-.bt__device {
-  background-color: var(--color-card);
-  border-radius: var(--radius-md);
-  padding: 15px;
-  margin-block: 5px;
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-}
-
-.bt__device-info {
-  flex: 1;
-}
-
-.bt__device-name {
-  font-size: 16px;
-  color: var(--color-text);
-  font-weight: 700;
-}
-
-.bt__device-address {
-  font-size: 12px;
-  color: var(--color-text);
-  opacity: var(--opacity-muted);
-}
-
-.bt__device-status {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: flex-start;
-  gap: var(--space-2);
-}
-
-.bt__status-text {
-  font-size: 12px;
-  color: var(--color-text);
-  opacity: 0.8;
-}
-
-.bt__empty {
-  text-align: center;
+.bt__placeholder {
   font-size: 14px;
   color: var(--color-text);
   opacity: var(--opacity-muted);
-  margin-top: 20px;
-}
-
-.bt__error {
-  text-align: center;
-  color: var(--color-primary);
-  margin-top: 20px;
   margin-bottom: 10px;
-}
-
-.bt__scan {
-  background-color: var(--color-primary);
-}
-
-.bt__scan--disabled {
-  background-color: var(--color-card);
-}
-
-.bt__messages {
-  flex: 1;
-  overflow: auto;
-}
-
-.bt__retry {
-  margin-top: 10px;
-  align-self: center;
-}
-
-.bt__hint {
-  font-size: 12px;
-  color: var(--color-text);
-  opacity: var(--opacity-muted);
-  font-style: italic;
+  line-height: 20px;
+  text-align: center;
 }
 
 .bt__username {
-  font-size: 12px;
-  color: var(--color-text);
-  opacity: var(--opacity-muted);
+  font-size: 16px;
+  color: var(--color-primary);
   font-weight: 700;
+  margin-top: 20px;
+  text-align: center;
+}
+
+.bt__header, .bt__section, .bt__device, .bt__device-info, .bt__device-name,
+.bt__device-address, .bt__device-status, .bt__status-text, .bt__empty,
+.bt__error, .bt__scan, .bt__scan--disabled, .bt__messages, .bt__retry, .bt__hint {
+  /* Deprecated in new version */
 }
 
 .modal__overlay {
