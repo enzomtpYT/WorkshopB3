@@ -18,7 +18,10 @@ import {
   NativeScrollEvent,
   NativeSyntheticEvent,
 } from 'react-native';
-import { useSafeAreaInsets, SafeAreaProvider } from 'react-native-safe-area-context';
+import {
+  useSafeAreaInsets,
+  SafeAreaProvider,
+} from 'react-native-safe-area-context';
 import {
   TextInput,
   Button,
@@ -35,6 +38,32 @@ import { broadcastListener } from './BroadcastListener';
 import MessageBubble from './MessageBubble';
 import { computeShowTimestampFlags } from './ShowTimestamp';
 import { bluetoothService, BluetoothDevice, BluetoothMessage } from './BluetoothService';
+
+function extractSenderAndBody(raw: string): { sender?: string; body: string } {
+  // 1) Essaye JSON d'abord
+  try {
+    const obj = JSON.parse(raw);
+    if (obj && typeof obj === 'object' && 'message' in obj) {
+      const senderGuess =
+        (obj as any).username ||
+        (obj as any).user ||
+        (obj as any).from ||
+        undefined;
+      return { sender: senderGuess, body: (obj as any).message };
+    }
+  } catch {
+    // pas du JSON → on continue
+  }
+
+  // 2) Pattern "Username: message" (une seule fois, en début de chaîne)
+  const m = raw.match(/^\s*([^:\n]{1,64})\s*:\s*(.+)$/s);
+  if (m) {
+    return { sender: m[1].trim(), body: m[2] };
+  }
+
+  // 3) Pas de username détecté → on garde tel quel
+  return { body: raw };
+}
 
 function generateTheme(palette: MaterialYouPalette) {
   const light = {
@@ -128,12 +157,21 @@ class App extends Component<{}, AppState> {
     try {
       await broadcastListener.startListening(
         (message: string, senderInfo: any) => {
+          const { sender: parsedSender, body } = extractSenderAndBody(message);
+
           const newMessage = {
-            message,
+            message: body,
             timestamp: Date.now(),
-            sender: senderInfo.address || 'Unknown',
+            // priorité au username parsé, sinon ce que donne le listener (si dispo), sinon IP, sinon "Unknown"
+            sender:
+              parsedSender ||
+              senderInfo?.username ||
+              senderInfo?.name ||
+              senderInfo?.address ||
+              'Unknown',
           };
-          this.setState((prev) => ({
+
+          this.setState(prev => ({
             receivedMessages: [...prev.receivedMessages, newMessage],
           }));
         },
@@ -157,7 +195,7 @@ class App extends Component<{}, AppState> {
   };
 
   toggleSettings = () => {
-    this.setState((prev) => ({ showSettings: !prev.showSettings }));
+    this.setState(prev => ({ showSettings: !prev.showSettings }));
   };
 
   saveUsername = (newUsername: string) => {
@@ -179,7 +217,7 @@ class App extends Component<{}, AppState> {
           isSent: true,
         };
 
-        this.setState((prev) => ({
+        this.setState(prev => ({
           receivedMessages: [...prev.receivedMessages, sentMessage],
         }));
 
@@ -283,8 +321,12 @@ const AppContent: React.FC<{
   );
 
   useEffect(() => {
-    const show = Keyboard.addListener('keyboardDidShow', () => setKeyboardVisible(true));
-    const hide = Keyboard.addListener('keyboardDidHide', () => setKeyboardVisible(false));
+    const show = Keyboard.addListener('keyboardDidShow', () =>
+      setKeyboardVisible(true),
+    );
+    const hide = Keyboard.addListener('keyboardDidHide', () =>
+      setKeyboardVisible(false),
+    );
     return () => {
       show.remove();
       hide.remove();
@@ -360,25 +402,39 @@ const AppContent: React.FC<{
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={keyboardVisible ? (Platform.OS === 'ios' ? 'padding' : 'height') : undefined}
+      behavior={
+        keyboardVisible
+          ? Platform.OS === 'ios'
+            ? 'padding'
+            : 'height'
+          : undefined
+      }
       keyboardVerticalOffset={0}
     >
       <View style={styles.messagesContainer}>
         <View style={styles.statusContainer}>
           <View style={styles.statusInfo}>
             <PaperText style={styles.statusText}>
-              Status: {isListening ? 'Listening for broadcasts' : 'Not listening'}
+              Status:{' '}
+              {isListening ? 'Listening for broadcasts' : 'Not listening'}
             </PaperText>
             {ownIpAddress && (
               <PaperText style={styles.ipText}>
                 Device IP: {ownIpAddress} (messages from this IP are filtered)
               </PaperText>
             )}
-            {username ? <PaperText style={styles.ipText}>Username: {username}</PaperText> : null}
+            {username ? (
+              <PaperText style={styles.ipText}>Username: {username}</PaperText>
+            ) : null}
           </View>
 
           <View style={styles.buttonContainer}>
-            <IconButton icon="cog" size={20} onPress={onOpenSettings} iconColor={theme.primary} />
+            <IconButton
+              icon="cog"
+              size={20}
+              onPress={onOpenSettings}
+              iconColor={theme.primary}
+            />
             <Button
               mode="outlined"
               onPress={onClearMessages}
@@ -399,7 +455,9 @@ const AppContent: React.FC<{
           keyboardShouldPersistTaps="handled"
         >
           {receivedMessages.length === 0 ? (
-            <PaperText style={styles.statusText}>No broadcast messages received yet...</PaperText>
+            <PaperText style={styles.statusText}>
+              No broadcast messages received yet...
+            </PaperText>
           ) : (
             receivedMessages.map((msg, index) => (
               <MessageBubble
@@ -423,10 +481,16 @@ const AppContent: React.FC<{
           textColor={theme.text}
           outlineColor={theme.primary}
           activeOutlineColor={theme.primary}
-          placeholder={username ? `${username}: Enter your message...` : 'Enter your message...'}
+          placeholder={
+            username
+              ? `${username}: Enter your message...`
+              : 'Enter your message...'
+          }
           onFocus={() => {
             if (autoScroll) {
-              requestAnimationFrame(() => scrollViewRef.current?.scrollToEnd({ animated: true }));
+              requestAnimationFrame(() =>
+                scrollViewRef.current?.scrollToEnd({ animated: true }),
+              );
             }
           }}
         />
@@ -951,13 +1015,22 @@ const SettingsModal: React.FC<{
       textAlign: 'center',
     },
     input: { marginBottom: 20, backgroundColor: theme.card },
-    buttonContainer: { flexDirection: 'row', justifyContent: 'space-between', gap: 10 },
+    buttonContainer: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      gap: 10,
+    },
     button: { flex: 1 },
     modalScrollContent: { paddingBottom: 8 },
   });
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
       <View style={modalStyles.modalOverlay}>
         <View style={modalStyles.modalContent}>
           <ScrollView contentContainerStyle={modalStyles.modalScrollContent}>
@@ -976,7 +1049,11 @@ const SettingsModal: React.FC<{
             />
 
             <View style={modalStyles.buttonContainer}>
-              <Button mode="outlined" onPress={onClose} style={modalStyles.button}>
+              <Button
+                mode="outlined"
+                onPress={onClose}
+                style={modalStyles.button}
+              >
                 Cancel
               </Button>
               <Button
