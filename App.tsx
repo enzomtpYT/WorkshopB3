@@ -37,10 +37,8 @@ import type { MaterialYouPalette } from 'react-native-material-you-colors';
 import { broadcastListener } from './BroadcastListener';
 import MessageBubble from './MessageBubble';
 import { computeShowTimestampFlags } from './ShowTimestamp';
-import { bluetoothService, BluetoothDevice, BluetoothMessage } from './BluetoothService';
 
 function extractSenderAndBody(raw: string): { sender?: string; body: string } {
-  // 1) Essaye JSON d'abord
   try {
     const obj = JSON.parse(raw);
     if (obj && typeof obj === 'object' && 'message' in obj) {
@@ -52,16 +50,13 @@ function extractSenderAndBody(raw: string): { sender?: string; body: string } {
       return { sender: senderGuess, body: (obj as any).message };
     }
   } catch {
-    // pas du JSON → on continue
   }
 
-  // 2) Pattern "Username: message" (une seule fois, en début de chaîne)
   const m = raw.match(/^\s*([^:\n]{1,64})\s*:\s*(.+)$/s);
   if (m) {
     return { sender: m[1].trim(), body: m[2] };
   }
 
-  // 3) Pas de username détecté → on garde tel quel
   return { body: raw };
 }
 
@@ -89,14 +84,6 @@ function generateTheme(palette: MaterialYouPalette) {
 
 export const { ThemeProvider, useMaterialYouTheme } =
   MaterialYou.createThemeContext(generateTheme);
-
-// Helper to format a Date as 24-hour HH:MM
-// function formatHHMM(date: Date = new Date()): string {
-//   const h = date.getHours().toString().padStart(2, '0');
-//   const m = date.getMinutes().toString().padStart(2, '0');
-//   return `${h}:${m}`;
-// }
-
 const USERNAME_STORAGE_KEY = 'broadcast_username';
 
 interface AppState {
@@ -162,7 +149,6 @@ class App extends Component<{}, AppState> {
           const newMessage = {
             message: body,
             timestamp: Date.now(),
-            // priorité au username parsé, sinon ce que donne le listener (si dispo), sinon IP, sinon "Unknown"
             sender:
               parsedSender ||
               senderInfo?.username ||
@@ -511,12 +497,6 @@ const AppContent: React.FC<{
 const BluetoothContent: React.FC<{ username: string }> = ({ username }) => {
   const theme = useMaterialYouTheme();
   const insets = useSafeAreaInsets();
-  const [detectedDevices, setDetectedDevices] = useState<BluetoothDevice[]>([]);
-  const [isScanning, setIsScanning] = useState(false);
-  const [messages, setMessages] = useState<BluetoothMessage[]>([]);
-  const [isInitialized, setIsInitialized] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [inputText, setInputText] = useState('');
 
   const styles = StyleSheet.create({
     container: {
@@ -528,443 +508,46 @@ const BluetoothContent: React.FC<{ username: string }> = ({ username }) => {
     content: {
       flex: 1,
       padding: 20,
-    },
-    headerContainer: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
+      justifyContent: 'center',
       alignItems: 'center',
-      marginBottom: 20,
     },
     title: {
       fontSize: 24,
       fontWeight: 'bold',
       color: theme.text,
+      marginBottom: 20,
     },
-    sectionTitle: {
-      fontSize: 18,
-      fontWeight: 'bold',
-      color: theme.text,
-      marginTop: 20,
-      marginBottom: 10,
-    },
-    deviceItem: {
-      backgroundColor: theme.card,
-      padding: 15,
-      marginVertical: 5,
-      borderRadius: 8,
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-    },
-    deviceInfo: {
-      flex: 1,
-    },
-    deviceName: {
-      fontSize: 16,
-      fontWeight: 'bold',
-      color: theme.text,
-    },
-    deviceAddress: {
-      fontSize: 12,
-      color: theme.text,
-      opacity: 0.7,
-    },
-    deviceStatus: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 5,
-    },
-    statusText: {
-      fontSize: 12,
-      color: theme.text,
-      opacity: 0.8,
-    },
-    emptyText: {
+    placeholderText: {
       textAlign: 'center',
       color: theme.text,
       opacity: 0.7,
-      marginTop: 20,
-    },
-    errorText: {
-      textAlign: 'center',
-      color: theme.primary,
-      marginTop: 20,
       marginBottom: 10,
-    },
-    scanButton: {
-      backgroundColor: theme.primary,
-    },
-    scanButtonDisabled: {
-      backgroundColor: theme.card,
-    },
-    messagesContainer: {
-      flex: 1,
-    },
-    retryButton: {
-      marginTop: 10,
-      alignSelf: 'center',
-    },
-    deviceHint: {
-      fontSize: 12,
-      color: theme.text,
-      opacity: 0.7,
-      fontStyle: 'italic',
+      lineHeight: 20,
     },
     usernameText: {
-      fontSize: 12,
-      color: theme.text,
-      opacity: 0.7,
+      fontSize: 16,
+      color: theme.primary,
       fontWeight: 'bold',
-    },
-    inputContainer: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 10,
-      marginTop: 10,
-      paddingHorizontal: 20,
-      paddingBottom: 10,
-    },
-    input: {
-      flex: 1,
-      backgroundColor: theme.card,
-    },
-    signalContainer: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 5,
-    },
-    signalIcon: {
-      margin: 0,
-      padding: 0,
+      marginTop: 20,
     },
   });
-
-  // Initialize Bluetooth service
-  useEffect(() => {
-    const initializeBluetooth = async () => {
-      try {
-        setError(null);
-        console.log('Starting Bluetooth initialization...');
-        
-        await bluetoothService.initialize(username || 'Anonymous');
-        
-        // Set up callbacks
-        bluetoothService.setOnDeviceFound((device: BluetoothDevice) => {
-          setDetectedDevices(prev => {
-            const exists = prev.find(d => d.id === device.id);
-            if (!exists) {
-              return [...prev, device];
-            } else {
-              // Update existing device with latest RSSI if it's stronger
-              return prev.map(d => 
-                d.id === device.id && device.rssi && (!d.rssi || device.rssi > d.rssi)
-                  ? { ...d, rssi: device.rssi }
-                  : d
-              );
-            }
-          });
-        });
-
-        bluetoothService.setOnMessageReceived((message: BluetoothMessage) => {
-          setMessages(prev => [...prev, message]);
-        });
-
-        // Start advertising so others can find us (may not work on all devices)
-        await bluetoothService.startAdvertising();
-        
-        setIsInitialized(true);
-        console.log('Bluetooth initialization completed successfully');
-
-      } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : 'Failed to initialize Bluetooth';
-        console.error('Bluetooth initialization failed:', errorMessage);
-        setError(errorMessage);
-        setIsInitialized(false);
-      }
-    };
-
-    // Initialize immediately
-    initializeBluetooth();
-
-    return () => {
-      bluetoothService.cleanup();
-    };
-  }, [username]); // Include username as dependency
-
-  const startScan = async () => {
-    if (!isInitialized) {
-      Alert.alert('Error', 'Bluetooth not initialized');
-      return;
-    }
-
-    setIsScanning(true);
-    setDetectedDevices([]); // Clear previous results
-    
-    try {
-      await bluetoothService.startScanning();
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to start scanning');
-      Alert.alert('Scan Error', err instanceof Error ? err.message : 'Failed to start scanning');
-    } finally {
-      // The service will automatically stop scanning after 30 seconds
-      setTimeout(() => {
-        setIsScanning(bluetoothService.getIsScanning());
-      }, 30500);
-    }
-  };
-
-  const connectToDevice = async (deviceId: string) => {
-    try {
-      const device = detectedDevices.find(d => d.id === deviceId);
-      if (!device) return;
-
-      if (device.connected) {
-        // Disconnect
-        await bluetoothService.disconnectFromDevice(deviceId);
-        setDetectedDevices(prev => 
-          prev.map(d => 
-            d.id === deviceId 
-              ? { ...d, connected: false }
-              : d
-          )
-        );
-      } else {
-        // Connect
-        try {
-          await bluetoothService.connectToDevice(deviceId);
-          setDetectedDevices(prev => 
-            prev.map(d => 
-              d.id === deviceId 
-                ? { ...d, connected: true }
-                : d
-            )
-          );
-          Alert.alert('Success', 'Connected to Workshop app user!');
-        } catch (connectErr) {
-          // If connection fails due to missing service, show a different message
-          const errorMessage = connectErr instanceof Error ? connectErr.message : 'Failed to connect';
-          if (errorMessage.includes('Workshop app')) {
-            Alert.alert('Not a Workshop App', 'This device does not appear to be running the Workshop app.');
-          } else {
-            throw connectErr; // Re-throw other errors
-          }
-        }
-      }
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to connect to device';
-      Alert.alert('Connection Error', errorMessage);
-    }
-  };
-
-  const clearMessages = () => {
-    setMessages([]);
-  };
-
-  const getSignalColor = (rssi: number): string => {
-    if (rssi > -50) return '#4CAF50'; // Strong - Green
-    if (rssi > -70) return '#FF9800'; // Medium - Orange
-    return '#F44336'; // Weak - Red
-  };
-
-  const sendMessage = async () => {
-    if (!inputText.trim()) return;
-    
-    const connectedDevices = bluetoothService.getConnectedDevices();
-    if (connectedDevices.length === 0) {
-      Alert.alert('No Connections', 'Please connect to at least one device first');
-      return;
-    }
-
-    try {
-      await bluetoothService.broadcastMessage(inputText.trim());
-      setInputText('');
-    } catch (sendError) {
-      console.error('Failed to send message:', sendError);
-      Alert.alert('Send Error', sendError instanceof Error ? sendError.message : 'Failed to send message');
-    }
-  };
 
   return (
     <View style={styles.container}>
       <View style={styles.content}>
-        <View style={styles.headerContainer}>
-          <PaperText style={styles.title}>Bluetooth Chat</PaperText>
-          <Button
-            mode="contained"
-            onPress={startScan}
-            disabled={isScanning || !isInitialized}
-            style={isScanning || !isInitialized ? styles.scanButtonDisabled : styles.scanButton}
-            loading={isScanning}
-            compact
-          >
-            {isScanning ? 'Scanning...' : 'Scan'}
-          </Button>
-        </View>
-
-        {error && (
-          <View>
-            <PaperText style={styles.errorText}>
-              {error}
-            </PaperText>
-            <Button
-              mode="outlined"
-              onPress={() => {
-                setError(null);
-                setIsInitialized(false);
-                // Trigger re-initialization
-                bluetoothService.initialize(username || 'Anonymous').then(() => {
-                  setIsInitialized(true);
-                }).catch((err) => {
-                  setError(err instanceof Error ? err.message : 'Failed to initialize Bluetooth');
-                });
-              }}
-              style={styles.retryButton}
-            >
-              Retry
-            </Button>
-          </View>
-        )}
-
-        {!isInitialized && !error && (
-          <PaperText style={styles.emptyText}>
-            Initializing Bluetooth...
+        <PaperText style={styles.title}>Bluetooth Chat</PaperText>
+        <PaperText style={styles.placeholderText}>
+          Bluetooth functionality is currently under development.
+        </PaperText>
+        <PaperText style={styles.placeholderText}>
+          This feature will allow you to discover and connect to nearby devices
+          running the Workshop app and exchange messages over Bluetooth.
+        </PaperText>
+        {username && (
+          <PaperText style={styles.usernameText}>
+            Signed in as: {username}
           </PaperText>
         )}
-
-        <View style={styles.headerContainer}>
-          <PaperText style={styles.sectionTitle}>
-            Detected Devices ({detectedDevices.length}) | Connected ({bluetoothService.getConnectedDevices().length})
-          </PaperText>
-          {detectedDevices.length > 0 && (
-            <Button
-              mode="outlined"
-              onPress={() => setDetectedDevices([])}
-              compact
-            >
-              Clear
-            </Button>
-          )}
-        </View>
-        <ScrollView>
-          {detectedDevices.length === 0 ? (
-            <PaperText style={styles.emptyText}>
-              {isScanning ? 'Scanning for nearby devices...' : 'No devices found. Tap "Scan" to search for nearby devices. Devices will be verified for Workshop app when you connect.'}
-            </PaperText>
-          ) : (
-            detectedDevices
-              .sort((a, b) => {
-                // Sort by signal strength (RSSI) in descending order
-                // Higher RSSI values (closer to 0) indicate stronger signals
-                const rssiA = a.rssi || -100; // Default to very weak signal if no RSSI
-                const rssiB = b.rssi || -100;
-                return rssiB - rssiA;
-              })
-              .map((device) => (
-              <View key={device.id} style={styles.deviceItem}>
-                <View style={styles.deviceInfo}>
-                  <PaperText style={styles.deviceName}>
-                    {device.name}
-                    {device.name?.startsWith('Workshop-') && ' ✓'}
-                  </PaperText>
-                  {device.username && device.username !== 'Unknown User' && (
-                    <PaperText style={styles.usernameText}>
-                      User: {device.username}
-                    </PaperText>
-                  )}
-                  <PaperText style={styles.deviceAddress}>{device.address}</PaperText>
-                  {device.rssi && (
-                    <View style={styles.signalContainer}>
-                      <IconButton
-                        icon={
-                          device.rssi > -50 ? 'wifi-strength-4' : 
-                          device.rssi > -70 ? 'wifi-strength-3' : 
-                          device.rssi > -85 ? 'wifi-strength-2' : 'wifi-strength-1'
-                        }
-                        size={16}
-                        iconColor={getSignalColor(device.rssi)}
-                        style={styles.signalIcon}
-                      />
-                      <PaperText style={[
-                        styles.deviceAddress,
-                        { color: getSignalColor(device.rssi) }
-                      ]}>
-                        {device.rssi} dBm ({device.rssi > -50 ? 'Strong' : device.rssi > -70 ? 'Medium' : 'Weak'})
-                      </PaperText>
-                    </View>
-                  )}
-                  <PaperText style={styles.deviceHint}>
-                    {device.name?.startsWith('Workshop-') 
-                      ? 'Verified Workshop app device' 
-                      : 'Potential device - connect to verify Workshop app'}
-                  </PaperText>
-                </View>
-                <View style={styles.deviceStatus}>
-                  <IconButton
-                    icon={device.connected ? 'bluetooth-connect' : device.name?.startsWith('Workshop-') ? 'shield-check' : 'bluetooth'}
-                    size={20}
-                    iconColor={device.connected ? theme.primary : device.name?.startsWith('Workshop-') ? '#4CAF50' : theme.text}
-                    onPress={() => connectToDevice(device.id)}
-                  />
-                  <PaperText style={styles.statusText}>
-                    {device.connected ? 'Connected' : 'Tap to connect'}
-                  </PaperText>
-                </View>
-              </View>
-            ))
-          )}
-        </ScrollView>
-
-        <View style={styles.headerContainer}>
-          <PaperText style={styles.sectionTitle}>Messages</PaperText>
-          <Button
-            mode="outlined"
-            onPress={clearMessages}
-            disabled={messages.length === 0}
-            compact
-          >
-            Clear
-          </Button>
-        </View>
-        <ScrollView style={styles.messagesContainer}>
-          {messages.length === 0 ? (
-            <PaperText style={styles.emptyText}>
-              No messages yet. Connect to a device to start chatting.
-            </PaperText>
-          ) : (
-            messages.map((msg, index) => (
-              <View key={index} style={styles.deviceItem}>
-                <PaperText style={styles.deviceName}>
-                  {msg.deviceName}: {msg.message}
-                </PaperText>
-              </View>
-            ))
-          )}
-        </ScrollView>
-        
-        {/* Message Input */}
-        <View style={styles.inputContainer}>
-          <TextInput
-            mode="outlined"
-            label="Message"
-            value={inputText}
-            onChangeText={setInputText}
-            style={styles.input}
-            textColor={theme.text}
-            outlineColor={theme.primary}
-            activeOutlineColor={theme.primary}
-            placeholder={`Send GATT message to ${bluetoothService.getConnectedDevices().length} connected device(s)...`}
-            disabled={!isInitialized || bluetoothService.getConnectedDevices().length === 0}
-          />
-          <IconButton
-            icon="send"
-            onPress={sendMessage}
-            iconColor={theme.textColored}
-            containerColor={theme.primary}
-            disabled={!inputText.trim() || !isInitialized || bluetoothService.getConnectedDevices().length === 0}
-            size={24}
-          />
-        </View>
       </View>
     </View>
   );
