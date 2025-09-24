@@ -1,5 +1,5 @@
 // ShowTimestamp.ts
-export type ChatMessage = {
+type ChatMessage = {
   message: string;
   timestamp: number; // ms
   sender: string;
@@ -22,6 +22,3 @@ export function computeShowTimestampFlags(msgs: ChatMessage[]): boolean[] {
     return !(sameAuthor && withinWindow);
   });
 }
-
-// Optionnel : export par défaut pour simplifier l'import
-export default computeShowTimestampFlags;

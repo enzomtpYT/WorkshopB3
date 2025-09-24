@@ -18,13 +18,17 @@ import {
   NativeScrollEvent,
   NativeSyntheticEvent,
 } from 'react-native';
-import { useSafeAreaInsets, SafeAreaProvider } from 'react-native-safe-area-context';
+import {
+  useSafeAreaInsets,
+  SafeAreaProvider,
+} from 'react-native-safe-area-context';
 import {
   TextInput,
   Button,
   Text as PaperText,
   IconButton,
   Provider as PaperProvider,
+  BottomNavigation,
 } from 'react-native-paper';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -34,6 +38,30 @@ import { broadcastListener } from './BroadcastListener';
 import MessageBubble from './MessageBubble';
 import { computeShowTimestampFlags } from './ShowTimestamp';
 import { sqliteService, Message } from './src/database/SQLiteService';
+
+// GARDER: La fonction extractSenderAndBody de main
+function extractSenderAndBody(raw: string): { sender?: string; body: string } {
+  try {
+    const obj = JSON.parse(raw);
+    if (obj && typeof obj === 'object' && 'message' in obj) {
+      const senderGuess =
+        (obj as any).username ||
+        (obj as any).user ||
+        (obj as any).from ||
+        undefined;
+      return { sender: senderGuess, body: (obj as any).message };
+    }
+  } catch {
+    // Ignore parsing errors and fall back to regex
+  }
+
+  const m = raw.match(/^\s*([^:\n]{1,64})\s*:\s*(.+)$/s);
+  if (m) {
+    return { sender: m[1].trim(), body: m[2] };
+  }
+
+  return { body: raw };
+}
 
 function generateTheme(palette: MaterialYouPalette) {
   const light = {
@@ -76,6 +104,7 @@ interface AppState {
   showSettings: boolean;
   username: string;
   isDatabaseInitialized: boolean;
+  activeTab: number;
 }
 
 class App extends Component<{}, AppState> {
@@ -87,6 +116,7 @@ class App extends Component<{}, AppState> {
     username: '',
     showSettings: false,
     isDatabaseInitialized: false,
+    activeTab: 0,
   };
 
   async componentDidMount() {
@@ -146,54 +176,58 @@ class App extends Component<{}, AppState> {
     }
   };
 
-startBroadcastListener = async () => {
-  try {
-    await broadcastListener.startListening(
-      async (message: string, senderInfo: any) => { // Ajouter async
-        try {
-          // Sauvegarder en base de données
-          const messageId = await sqliteService.saveMessage({
-            message,
-            timestamp: this.formatHHMM(new Date()),
-            sender: senderInfo.address || 'Unknown',
-            isSent: false,
-            senderIp: senderInfo.address,
-          });
+  startBroadcastListener = async () => {
+    try {
+      await broadcastListener.startListening(
+        async (message: string, senderInfo: any) => {
+          try {
+            // Utiliser extractSenderAndBody de main
+            const { sender: parsedSender, body } = extractSenderAndBody(message);
+            
+            // Sauvegarder en base avec SQLite
+            const messageId = await sqliteService.saveMessage({
+              message: body, // Utiliser body au lieu de message
+              timestamp: this.formatHHMM(new Date()),
+              sender: parsedSender || senderInfo?.username || senderInfo?.name || senderInfo?.address || 'Unknown',
+              isSent: false,
+              senderIp: senderInfo.address,
+            });
 
-          // Créer le message pour l'état
-          const newMessage: Message = {
-            _id: messageId,
-            message,
-            timestamp: this.formatHHMM(new Date()),
-            sender: senderInfo.address || 'Unknown',
-            isSent: false,
-            senderIp: senderInfo.address,
-          };
+            // Créer le message pour l'état
+            const newMessage: Message = {
+              _id: messageId,
+              message: body,
+              timestamp: this.formatHHMM(new Date()),
+              sender: parsedSender || senderInfo?.username || senderInfo?.name || senderInfo?.address || 'Unknown',
+              isSent: false,
+              senderIp: senderInfo.address,
+            };
 
-          this.setState((prev) => ({
-            receivedMessages: [...prev.receivedMessages, newMessage],
-          }));
-        } catch (error) {
-          console.error('Failed to save received message:', error);
-        }
-      },
-    );
+            this.setState((prev) => ({
+              receivedMessages: [...prev.receivedMessages, newMessage],
+            }));
+          } catch (error) {
+            console.error('Failed to save received message:', error);
+          }
+        },
+      );
 
-    const ownIp = broadcastListener.getDetectedIpAddress();
-    this.setState({ isListening: true, ownIpAddress: ownIp });
-  } catch (error) {
-    console.error('Failed to start broadcast listener:', error);
-    Alert.alert('Error', 'Failed to start listening for broadcast messages');
-  }
-};
+      const ownIp = broadcastListener.getDetectedIpAddress();
+      this.setState({ isListening: true, ownIpAddress: ownIp });
+    } catch (error) {
+      console.error('Failed to start broadcast listener:', error);
+      Alert.alert('Error', 'Failed to start listening for broadcast messages');
+    }
+  };
+
   stopBroadcastListener = () => {
     broadcastListener.stopListening();
     this.setState({ isListening: false });
   };
 
-  clearMessages = async () => { // Ajouter async
+  clearMessages = async () => {
     try {
-      await sqliteService.clearAllMessages(); // Ajouter cette ligne
+      await sqliteService.clearAllMessages();
       this.setState({ receivedMessages: [] });
     } catch (error) {
       console.error('Failed to clear messages:', error);
@@ -207,6 +241,10 @@ startBroadcastListener = async () => {
   saveUsername = (newUsername: string) => {
     this.setState({ username: newUsername });
     this.saveUsernameToStorage(newUsername);
+  };
+
+  handleTabChange = (index: number) => {
+    this.setState({ activeTab: index });
   };
 
   sendMsg = async () => {
@@ -247,21 +285,41 @@ startBroadcastListener = async () => {
 
   onTextChange = (text: string) => this.setState({ inputText: text });
 
+  renderBroadcastTab = () => (
+    <AppContent
+      inputText={this.state.inputText}
+      onTextChange={this.onTextChange}
+      sendMsg={this.sendMsg}
+      receivedMessages={this.state.receivedMessages}
+      isListening={this.state.isListening}
+      onClearMessages={this.clearMessages}
+      ownIpAddress={this.state.ownIpAddress}
+      onOpenSettings={this.toggleSettings}
+      username={this.state.username}
+    />
+  );
+
+  renderBluetoothTab = () => <BluetoothContent username={this.state.username} />;
+
   render() {
+    const routes = [
+      { key: 'broadcast', title: 'Broadcast', focusedIcon: 'wifi', unfocusedIcon: 'wifi-off' },
+      { key: 'bluetooth', title: 'Bluetooth', focusedIcon: 'bluetooth', unfocusedIcon: 'bluetooth-off' },
+    ];
+
+    const renderScene = BottomNavigation.SceneMap({
+      broadcast: this.renderBroadcastTab,
+      bluetooth: this.renderBluetoothTab,
+    });
+
     return (
       <SafeAreaProvider>
         <PaperProvider>
           <ThemeProvider>
-            <AppContent
-              inputText={this.state.inputText}
-              onTextChange={this.onTextChange}
-              sendMsg={this.sendMsg}
-              receivedMessages={this.state.receivedMessages}
-              isListening={this.state.isListening}
-              onClearMessages={this.clearMessages}
-              ownIpAddress={this.state.ownIpAddress}
-              onOpenSettings={this.toggleSettings}
-              username={this.state.username}
+            <BottomNavigation
+              navigationState={{ index: this.state.activeTab, routes }}
+              onIndexChange={this.handleTabChange}
+              renderScene={renderScene}
             />
             <SettingsModal
               visible={this.state.showSettings}
@@ -280,12 +338,7 @@ const AppContent: React.FC<{
   inputText: string;
   onTextChange: (text: string) => void;
   sendMsg: () => void;
-  receivedMessages: Array<{
-    message: string;
-    timestamp: number;
-    sender: string;
-    isSent?: boolean;
-  }>;
+  receivedMessages: Message[];
   isListening: boolean;
   onClearMessages: () => void;
   ownIpAddress: string | null;
@@ -306,7 +359,6 @@ const AppContent: React.FC<{
   const [keyboardVisible, setKeyboardVisible] = React.useState(false);
   const insets = useSafeAreaInsets();
 
-  // ⚠️ Calcul des flags (re-mémorisé)
   const showFlags = useMemo(
     () => computeShowTimestampFlags(receivedMessages),
     [receivedMessages],
@@ -357,7 +409,6 @@ const AppContent: React.FC<{
     ipText: { color: theme.text, fontSize: 12, opacity: 0.7 },
   });
 
-  // ------- Auto-scroll + suivi clavier -------
   const scrollViewRef = useRef<ScrollView | null>(null);
   const [autoScroll, setAutoScroll] = useState(true);
 
@@ -390,7 +441,13 @@ const AppContent: React.FC<{
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={keyboardVisible ? (Platform.OS === 'ios' ? 'padding' : 'height') : undefined}
+      behavior={
+        keyboardVisible
+          ? Platform.OS === 'ios'
+            ? 'padding'
+            : 'height'
+          : undefined
+      }
       keyboardVerticalOffset={0}
     >
       <View style={styles.messagesContainer}>
@@ -473,7 +530,65 @@ const AppContent: React.FC<{
   );
 };
 
-// Settings Modal Component
+const BluetoothContent: React.FC<{ username: string }> = ({ username }) => {
+  const theme = useMaterialYouTheme();
+  const insets = useSafeAreaInsets();
+
+  const styles = StyleSheet.create({
+    container: {
+      flex: 1,
+      paddingTop: insets.top,
+      paddingBottom: insets.bottom,
+      backgroundColor: theme.background,
+    },
+    content: {
+      flex: 1,
+      padding: 20,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    title: {
+      fontSize: 24,
+      fontWeight: 'bold',
+      color: theme.text,
+      marginBottom: 20,
+    },
+    placeholderText: {
+      textAlign: 'center',
+      color: theme.text,
+      opacity: 0.7,
+      marginBottom: 10,
+      lineHeight: 20,
+    },
+    usernameText: {
+      fontSize: 16,
+      color: theme.primary,
+      fontWeight: 'bold',
+      marginTop: 20,
+    },
+  });
+
+  return (
+    <View style={styles.container}>
+      <View style={styles.content}>
+        <PaperText style={styles.title}>Bluetooth Chat</PaperText>
+        <PaperText style={styles.placeholderText}>
+          Bluetooth functionality is currently under development.
+        </PaperText>
+        <PaperText style={styles.placeholderText}>
+          This feature will allow you to discover and connect to nearby devices
+          running the Workshop app and exchange messages over Bluetooth.
+        </PaperText>
+        {username && (
+          <PaperText style={styles.usernameText}>
+            Signed in as: {username}
+          </PaperText>
+        )}
+      </View>
+    </View>
+  );
+};
+
 const SettingsModal: React.FC<{
   visible: boolean;
   username: string;

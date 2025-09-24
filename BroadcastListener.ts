@@ -160,10 +160,6 @@ export class BroadcastListener {
     }
   }
 
-  isActive(): boolean {
-    return this.isListening;
-  }
-
   sendBroadcast(message: string, username: string): Promise<void> {
     return new Promise((resolve, reject) => {
       this.initializeSenderSocket();
@@ -234,10 +230,6 @@ export class BroadcastListener {
       this.senderSocket.close();
       this.senderSocket = null;
     }
-  }
-
-  async refreshIpAddress(): Promise<void> {
-    await this.getOwnIpAddress();
   }
 
   getDetectedIpAddress(): string | null {
