@@ -26,6 +26,13 @@ export const createSettingsModalStyles = (theme: any) =>
       marginBottom: 20,
       textAlign: 'center',
     },
+    infoText: {
+      fontSize: 14,
+      color: theme.text,
+      marginBottom: 20,
+      textAlign: 'center',
+      opacity: 0.8,
+    },
     input: { 
       marginBottom: 20, 
       backgroundColor: theme.card 

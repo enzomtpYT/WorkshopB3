@@ -70,4 +70,12 @@ export const createMessageBubbleStyles = (msg: any, theme: any) =>
       // label d'heure à droite de la dernière ligne
       marginLeft: 0,
     },
+    from: { 
+      color: msg.isSent ? theme.textColored : theme.text, 
+      fontSize: 12,
+      opacity: 0.9,
+      fontWeight: 'bold',
+      marginBottom: 4,
+    },
+
   });

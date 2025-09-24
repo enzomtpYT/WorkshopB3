@@ -85,4 +85,10 @@ export const createBluetoothContentStyles = (theme: any, insets: any) =>
       flex: 1,
       backgroundColor: theme.card,
     },
+    activeIcon: {
+      opacity: 1,
+    },
+    inactiveIcon: {
+      opacity: 0.7,
+    },
   });

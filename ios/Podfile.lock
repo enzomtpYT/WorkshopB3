@@ -9,6 +9,7 @@ PODS:
   - hermes-engine (0.81.4):
     - hermes-engine/Pre-built (= 0.81.4)
   - hermes-engine/Pre-built (0.81.4)
+  - MultiplatformBleAdapter (0.2.0)
   - RCT-Folly (2024.11.18.00):
     - boost
     - DoubleConversion
@@ -1749,9 +1750,40 @@ PODS:
     - React-RCTFBReactNativeSpec
     - ReactCommon/turbomodule/core
     - SocketRocket
+  - react-native-ble-plx (3.5.0):
+    - boost
+    - DoubleConversion
+    - fast_float
+    - fmt
+    - glog
+    - hermes-engine
+    - MultiplatformBleAdapter (= 0.2.0)
+    - RCT-Folly
+    - RCT-Folly/Fabric
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Core
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-jsi
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-renderercss
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - SocketRocket
+    - Yoga
   - react-native-netinfo (11.4.1):
     - React-Core
   - react-native-safe-area-context (5.6.1):
+    - React-Core
+  - react-native-sqlite-storage (6.0.1):
     - React-Core
   - react-native-tcp-socket (6.3.0):
     - CocoaAsyncSocket
@@ -2268,6 +2300,8 @@ PODS:
     - React-Core
   - RNDeviceInfo (14.1.1):
     - React-Core
+  - RNPermissions (5.4.2):
+    - React-Core
   - RNVectorIcons (10.3.0):
     - boost
     - DoubleConversion
@@ -2341,8 +2375,10 @@ DEPENDENCIES:
   - React-logger (from `../node_modules/react-native/ReactCommon/logger`)
   - React-Mapbuffer (from `../node_modules/react-native/ReactCommon`)
   - React-microtasksnativemodule (from `../node_modules/react-native/ReactCommon/react/nativemodule/microtasks`)
+  - react-native-ble-plx (from `../node_modules/react-native-ble-plx`)
   - "react-native-netinfo (from `../node_modules/@react-native-community/netinfo`)"
   - react-native-safe-area-context (from `../node_modules/react-native-safe-area-context`)
+  - react-native-sqlite-storage (from `../node_modules/react-native-sqlite-storage`)
   - react-native-tcp-socket (from `../node_modules/react-native-tcp-socket`)
   - react-native-udp (from `../node_modules/react-native-udp`)
   - React-NativeModulesApple (from `../node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios`)
@@ -2377,6 +2413,7 @@ DEPENDENCIES:
   - ReactCommon/turbomodule/core (from `../node_modules/react-native/ReactCommon`)
   - "RNCAsyncStorage (from `../node_modules/@react-native-async-storage/async-storage`)"
   - RNDeviceInfo (from `../node_modules/react-native-device-info`)
+  - RNPermissions (from `../node_modules/react-native-permissions`)
   - RNVectorIcons (from `../node_modules/react-native-vector-icons`)
   - SocketRocket (~> 0.7.1)
   - Yoga (from `../node_modules/react-native/ReactCommon/yoga`)
@@ -2384,6 +2421,7 @@ DEPENDENCIES:
 SPEC REPOS:
   trunk:
     - CocoaAsyncSocket
+    - MultiplatformBleAdapter
     - SocketRocket
 
 EXTERNAL SOURCES:
@@ -2468,10 +2506,14 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native/ReactCommon"
   React-microtasksnativemodule:
     :path: "../node_modules/react-native/ReactCommon/react/nativemodule/microtasks"
+  react-native-ble-plx:
+    :path: "../node_modules/react-native-ble-plx"
   react-native-netinfo:
     :path: "../node_modules/@react-native-community/netinfo"
   react-native-safe-area-context:
     :path: "../node_modules/react-native-safe-area-context"
+  react-native-sqlite-storage:
+    :path: "../node_modules/react-native-sqlite-storage"
   react-native-tcp-socket:
     :path: "../node_modules/react-native-tcp-socket"
   react-native-udp:
@@ -2540,6 +2582,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/@react-native-async-storage/async-storage"
   RNDeviceInfo:
     :path: "../node_modules/react-native-device-info"
+  RNPermissions:
+    :path: "../node_modules/react-native-permissions"
   RNVectorIcons:
     :path: "../node_modules/react-native-vector-icons"
   Yoga:
@@ -2554,6 +2598,7 @@ SPEC CHECKSUMS:
   fmt: a40bb5bd0294ea969aaaba240a927bd33d878cdd
   glog: 5683914934d5b6e4240e497e0f4a3b42d1854183
   hermes-engine: 35c763d57c9832d0eef764316ca1c4d043581394
+  MultiplatformBleAdapter: b1fddd0d499b96b607e00f0faa8e60648343dc1d
   RCT-Folly: 846fda9475e61ec7bcbf8a3fe81edfcaeb090669
   RCTDeprecation: c0ed3249a97243002615517dff789bf4666cf585
   RCTRequired: 58719f5124f9267b5f9649c08bf23d9aea845b23
@@ -2587,8 +2632,10 @@ SPEC CHECKSUMS:
   React-logger: a3cb5b29c32b8e447b5a96919340e89334062b48
   React-Mapbuffer: 9d2434a42701d6144ca18f0ca1c4507808ca7696
   React-microtasksnativemodule: 75b6604b667d297292345302cc5bfb6b6aeccc1b
+  react-native-ble-plx: fe08db41590cb4b015612046972acc44e4551c66
   react-native-netinfo: cec9c4e86083cb5b6aba0e0711f563e2fbbff187
   react-native-safe-area-context: 2243039f43d10cb1ea30ec5ac57fc6d1448413f4
+  react-native-sqlite-storage: 0c84826214baaa498796c7e46a5ccc9a82e114ed
   react-native-tcp-socket: 120072c8020262032773f80f0daaf3964aaa08a1
   react-native-udp: 806f16ab890dd838bc073afcebd6a221d4965572
   React-NativeModulesApple: 879fbdc5dcff7136abceb7880fe8a2022a1bd7c3
@@ -2623,10 +2670,11 @@ SPEC CHECKSUMS:
   ReactCommon: 394c6b92765cf6d211c2c3f7f6bc601dffb316a6
   RNCAsyncStorage: b44e8a4e798c3e1f56bffccd0f591f674fb9198f
   RNDeviceInfo: bcce8752b5043a623fe3c26789679b473f705d3c
+  RNPermissions: 0b0cdb0dfcc2fabc136a3d596220cc3d91977d79
   RNVectorIcons: 9084b0cf37b3c5690b730c5627a21d750c9f517e
   SocketRocket: d4aabe649be1e368d1318fdf28a022d714d65748
   Yoga: a3ed390a19db0459bd6839823a6ac6d9c6db198d
 
-PODFILE CHECKSUM: ecbcd20b5b0ea98e521da9842dc7347295084dd3
+PODFILE CHECKSUM: d784cf463cf5426890bb99cdb68dc397c8366ed4
 
 COCOAPODS: 1.15.2
