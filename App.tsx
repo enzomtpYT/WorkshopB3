@@ -68,7 +68,6 @@ function generateTheme(palette: MaterialYouPalette) {
     textColored: palette.system_accent1[2],
     background: palette.system_neutral1[1],
     card: palette.system_accent2[2],
-    icon: palette.system_accent1[10],
   };
   const dark: typeof light = {
     isDark: true,
@@ -77,7 +76,6 @@ function generateTheme(palette: MaterialYouPalette) {
     textColored: palette.system_accent1[9],
     background: palette.system_neutral1[11],
     card: palette.system_accent2[10],
-    icon: palette.system_accent1[3],
   };
   return { light, dark };
 }
@@ -169,11 +167,6 @@ class App extends Component<{}, AppState> {
       console.error('Failed to start broadcast listener:', error);
       Alert.alert('Error', 'Failed to start listening for broadcast messages');
     }
-  };
-
-  stopBroadcastListener = () => {
-    broadcastListener.stopListening();
-    this.setState({ isListening: false });
   };
 
   clearMessages = () => {
