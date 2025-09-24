@@ -11,10 +11,9 @@ import { Message } from './src/database/SQLiteService'; // AJOUTER: Import du bo
 //   isSent?: boolean;
 // };
 
-// CHANGER: Fonction pour timestamp string
-function formatTime(timestamp: string) {
-  // Votre timestamp SQLite est déjà au format HH:MM
-  return timestamp;
+function formatTime(timestamp: number) {
+  const date = new Date(timestamp);
+  return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
 }
 
 const GAP = 8;
@@ -60,6 +59,14 @@ const MessageBubble: React.FC<{
           flexDirection: 'row',
           justifyContent: 'space-between',
           marginBottom: 2,
+        },
+
+        from: { 
+          color: msg.isSent ? theme.textColored : theme.text, 
+          fontSize: 12,
+          opacity: 0.9,
+          fontWeight: 'bold',
+          marginBottom: 4,
         },
 
         text: { color: msg.isSent ? theme.textColored : theme.text, fontSize: 14 },
@@ -144,13 +151,9 @@ const MessageBubble: React.FC<{
     <View style={styles.wrap}>
       <Card style={styles.card}>
         <Card.Content style={contentStyle}>
-          <View style={styles.header}>
-            {!msg.isSent ? (
-              <PaperText style={styles.info}>From: {msg.sender}</PaperText>
-            ) : (
-              <View />
-            )}
-          </View>
+          {!msg.isSent && (
+            <PaperText style={styles.from}>{msg.sender}</PaperText>
+          )}
 
           <View
             style={styles.textBox}

@@ -3,7 +3,7 @@ import SQLite, { SQLiteDatabase } from 'react-native-sqlite-storage';
 export interface Message {
   _id: string;
   message: string;
-  timestamp: string;
+  timestamp: number;
   sender: string;
   isSent: boolean;
   senderIp?: string;
@@ -17,11 +17,11 @@ class SQLiteService {
 
   async init(): Promise<void> {
     return new Promise((resolve, reject) => {
+      SQLite.enablePromise(true);
       SQLite.openDatabase(
         {
           name: 'broadcast.db',
           location: 'default',
-          createFromLocation: '~www/broadcast.db',
         },
         (database) => {
           this.db = database;
@@ -134,7 +134,7 @@ class SQLiteService {
           tx.executeSql(
             'SELECT * FROM messages ORDER BY timestamp ASC',
             [],
-            (tx, results) => {
+            (txx, results) => {
               const messages: Message[] = [];
               for (let i = 0; i < results.rows.length; i++) {
                 const row = results.rows.item(i);

@@ -1,5 +1,5 @@
-import 'react-native-get-random-values'; // Polyfill pour crypto.getRandomValues()
-import CryptoJS from 'crypto-js';
+import 'react-native-get-random-values';
+import CryptoJS from 'react-native-crypto-js';
 
 export interface EncryptedMessage {
   encrypted: string;
