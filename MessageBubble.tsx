@@ -11,47 +11,53 @@ type Msg = {
 
 function formatTime(ts: number) {
   const d = new Date(ts);
-  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  try {
+    return d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', hour12: false });
+  } catch {
+    const h = String(d.getHours()).padStart(2, '0');
+    const m = String(d.getMinutes()).padStart(2, '0');
+    return `${h}:${m}`;
+  }
 }
+
+const GAP = 8; // espace entre texte et heure
 
 const MessageBubble: React.FC<{
   msg: Msg;
-  showTime: boolean;
+  showTime: boolean; // tu continues à ne l’afficher que sur le dernier du lot
   theme: any;
 }> = ({ msg, showTime, theme }) => {
-  const [textWidth, setTextWidth] = React.useState(0);
-  const [bubbleWidth, setBubbleWidth] = React.useState(0);
-  const [timeWidth, setTimeWidth] = React.useState(0);
-  const [lineCount, setLineCount] = React.useState(1);
-
   const timeStr = formatTime(msg.timestamp);
 
+  // Mesures
+  const [lastLineWidth, setLastLineWidth] = React.useState(0);
+  const [textBoxWidth, setTextBoxWidth] = React.useState(0);
+  const [timeWidth, setTimeWidth] = React.useState(0);
+  const [lineTexts, setLineTexts] = React.useState<string[] | null>(null);
+
+  // Décision : l’heure tient sur la dernière ligne ET flush-right ?
   const canInlineTime =
     showTime &&
-    lineCount === 1 &&
-    textWidth > 0 &&
+    lastLineWidth > 0 &&
+    textBoxWidth > 0 &&
     timeWidth > 0 &&
-    textWidth + timeWidth + 8 <= bubbleWidth;
+    lastLineWidth + GAP + timeWidth <= textBoxWidth;
 
   const styles = React.useMemo(
     () =>
       StyleSheet.create({
-        wrapSent: { flexDirection: 'row', marginBottom: 8, justifyContent: 'flex-end' },
-        wrapRecv: { flexDirection: 'row', marginBottom: 8, justifyContent: 'flex-start' },
-        cardSent: {
-          maxWidth: '80%',
-          backgroundColor: theme.primary,
-          alignSelf: 'flex-end',
+        wrap: {
+          flexDirection: 'row',
+          marginBottom: 8,
+          justifyContent: msg.isSent ? 'flex-end' : 'flex-start',
         },
-        cardRecv: {
+        card: {
           maxWidth: '80%',
-          backgroundColor: theme.card,
-          alignSelf: 'flex-start',
+          backgroundColor: msg.isSent ? theme.primary : theme.card,
+          alignSelf: msg.isSent ? 'flex-end' : 'flex-start',
         },
-        // Card.Content de base
-        content: { paddingTop: 5, paddingBottom:6},
-        // Variante : on ajoute de la place pour l’heure en bas à droite
-        contentWithBottomTime: { paddingBottom: 18 },
+        content: { paddingBottom: 6, paddingTop: 5 },
+        contentWithBottomTime: { paddingBottom: 18 }, // quand l’heure est en bas-droite
 
         header: {
           flexDirection: 'row',
@@ -59,74 +65,118 @@ const MessageBubble: React.FC<{
           marginBottom: 2,
         },
 
-        // Corps du message : deux variantes d’orientation + d’alignement
-        bodyRow: { flexDirection: 'row', alignItems: 'flex-end' },
-        bodyColumn: { flexDirection: 'column', alignItems: 'flex-start' },
+        text: { color: msg.isSent ? theme.textColored : theme.text, fontSize: 14 },
 
-        textSent: { color: theme.textColored, fontSize: 14 },
-        textRecv: { color: theme.text, fontSize: 14 },
+        info: { color: msg.isSent ? theme.textColored : theme.text, fontSize: 11, opacity: 0.75 },
 
-        infoSent: { color: theme.textColored, fontSize: 11, opacity: 0.75 },
-        infoRecv: { color: theme.text, fontSize: 11, opacity: 0.75 },
+        textBox: { position: 'relative', width: '100%' }, // prend toute la largeur de la bulle
 
-        // Heure inline (à la suite du texte)
-        timeInline: { marginLeft: 8 },
+        // Heure en bas-droite du Card.Content (mode non-inline)
+        timeBottomRight: { position: 'absolute', right: 8, bottom: 6, zIndex: 1 },
 
-        // Heure en bas à droite
-        timeBottom: { position: 'absolute', right: 8, bottom: 6 },
+        // Ligne finale en "row" quand ça tient
+        lastLineRow: {
+          flexDirection: 'row',
+          alignItems: 'flex-end',
+          width: '100%',
+        },
+        lastLineTextWrap: {
+          flex: 1,            // occupe tout l'espace restant
+          paddingRight: GAP,  // l'écart visuel avec l'heure
+        },
+        lastLineText: {
+          color: msg.isSent ? theme.textColored : theme.text,
+          fontSize: 14,
+          // flexShrink: 1,
+          // garantit qu'elle reste sur 1 ligne car on sait que ça tient
+        },
+        timeInlineLabel: {
+          // label d’heure à droite de la dernière ligne
+          marginLeft: 0,
+        },
       }),
-    [theme],
+    [msg.isSent, theme],
   );
 
-  const wrapStyle = msg.isSent ? styles.wrapSent : styles.wrapRecv;
-  const cardStyle = msg.isSent ? styles.cardSent : styles.cardRecv;
-  const textStyle = msg.isSent ? styles.textSent : styles.textRecv;
-  const infoStyle = msg.isSent ? styles.infoSent : styles.infoRecv;
-
-  // Card.Content : base + variante « paddingBottom »
   const contentStyle = [
     styles.content,
     showTime && !canInlineTime ? styles.contentWithBottomTime : null,
   ];
 
-  // Corps du message : row si inline possible, sinon column
-  const bodyStyle = canInlineTime ? styles.bodyRow : styles.bodyColumn;
+  // Helper pour rendre soit le bloc "split" (autres lignes + dernière ligne avec heure),
+  // soit le bloc standard (texte complet).
+  const renderTextBlock = () => {
+    if (showTime && canInlineTime && lineTexts && lineTexts.length > 0) {
+      const last = lineTexts[lineTexts.length - 1];
+      const prev = lineTexts.slice(0, -1);
+
+      return (
+        <>
+          {prev.length > 0 && (
+            <PaperText style={styles.text}>{prev.join('\n')}</PaperText>
+          )}
+
+          <View style={styles.lastLineRow}>
+           <View style={styles.lastLineTextWrap}>
+             <PaperText style={styles.lastLineText} numberOfLines={1} ellipsizeMode="clip">
+               {last}
+             </PaperText>
+           </View>
+           <PaperText
+             style={[styles.info, styles.timeInlineLabel]}
+             onLayout={(e) => {
+               if (timeWidth === 0) setTimeWidth(e.nativeEvent.layout.width);
+             }}
+           >
+             {timeStr}
+           </PaperText>
+         </View>
+        </>
+      );
+    }
+
+    // Bloc standard : on mesure ici les lignes et la dernière largeur
+    return (
+      <PaperText
+        style={styles.text}
+        onTextLayout={(ev) => {
+          const lines = ev.nativeEvent.lines || [];
+          setLineTexts(lines.map((l) => l.text));
+          const last = lines[lines.length - 1];
+          setLastLineWidth(last ? last.width || 0 : 0);
+        }}
+      >
+        {msg.message}
+      </PaperText>
+    );
+  };
 
   return (
-    <View style={wrapStyle}>
-      <Card style={cardStyle}>
-        <Card.Content onLayout={(e) => setBubbleWidth(e.nativeEvent.layout.width)} style={contentStyle}>
+    <View style={styles.wrap}>
+      <Card style={styles.card}>
+        <Card.Content style={contentStyle}>
           <View style={styles.header}>
-            {!msg.isSent ? <PaperText style={infoStyle}>From: {msg.sender}</PaperText> : <View />}
-          </View>
-
-          <View style={bodyStyle}>
-            <PaperText
-              onTextLayout={(ev) => {
-                const lines = ev.nativeEvent.lines || [];
-                setLineCount(lines.length || 1);
-                if (lines.length === 1) setTextWidth(lines[0].width || 0);
-                else setTextWidth(0);
-              }}
-              style={textStyle}
-            >
-              {msg.message}
-            </PaperText>
-
-            {showTime && canInlineTime && (
-              <PaperText
-                onLayout={(e) => setTimeWidth(e.nativeEvent.layout.width)}
-                style={[infoStyle, styles.timeInline]}
-              >
-                {timeStr}
-              </PaperText>
+            {!msg.isSent ? (
+              <PaperText style={styles.info}>From: {msg.sender}</PaperText>
+            ) : (
+              <View />
             )}
           </View>
 
+          <View
+            style={styles.textBox}
+            onLayout={(e) => setTextBoxWidth(e.nativeEvent.layout.width)}
+          >
+            {renderTextBlock()}
+          </View>
+
+          {/* Heure en bas-droite si ça ne tient pas en dernière ligne */}
           {showTime && !canInlineTime && (
             <PaperText
-              onLayout={(e) => setTimeWidth(e.nativeEvent.layout.width)}
-              style={[infoStyle, styles.timeBottom]}
+              style={[styles.info, styles.timeBottomRight]}
+              onLayout={(e) => {
+                if (timeWidth === 0) setTimeWidth(e.nativeEvent.layout.width);
+              }}
             >
               {timeStr}
             </PaperText>
