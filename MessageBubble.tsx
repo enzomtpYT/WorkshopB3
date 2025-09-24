@@ -1,33 +1,30 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { Card, Text as PaperText } from 'react-native-paper';
+import { Message } from './src/database/SQLiteService'; // AJOUTER: Import du bon type
 
-type Msg = {
-  message: string;
-  timestamp: number;
-  sender: string;
-  isSent?: boolean;
-};
+// SUPPRIMER: L'ancien type
+// type Msg = {
+//   message: string;
+//   timestamp: number;
+//   sender: string;
+//   isSent?: boolean;
+// };
 
-function formatTime(ts: number) {
-  const d = new Date(ts);
-  try {
-    return d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', hour12: false });
-  } catch {
-    const h = String(d.getHours()).padStart(2, '0');
-    const m = String(d.getMinutes()).padStart(2, '0');
-    return `${h}:${m}`;
-  }
+// CHANGER: Fonction pour timestamp string
+function formatTime(timestamp: string) {
+  // Votre timestamp SQLite est déjà au format HH:MM
+  return timestamp;
 }
 
-const GAP = 8; // espace entre texte et heure
+const GAP = 8;
 
 const MessageBubble: React.FC<{
-  msg: Msg;
-  showTime: boolean; // tu continues à ne l’afficher que sur le dernier du lot
+  msg: Message; // CHANGER: Utiliser Message
+  showTime: boolean;
   theme: any;
 }> = ({ msg, showTime, theme }) => {
-  const timeStr = formatTime(msg.timestamp);
+  const timeStr = formatTime(msg.timestamp); // CHANGER: timestamp est string
 
   // Mesures
   const [lastLineWidth, setLastLineWidth] = React.useState(0);
@@ -35,7 +32,7 @@ const MessageBubble: React.FC<{
   const [timeWidth, setTimeWidth] = React.useState(0);
   const [lineTexts, setLineTexts] = React.useState<string[] | null>(null);
 
-  // Décision : l’heure tient sur la dernière ligne ET flush-right ?
+  // Décision : l'heure tient sur la dernière ligne ET flush-right ?
   const canInlineTime =
     showTime &&
     lastLineWidth > 0 &&
@@ -57,7 +54,7 @@ const MessageBubble: React.FC<{
           alignSelf: msg.isSent ? 'flex-end' : 'flex-start',
         },
         content: { paddingBottom: 6, paddingTop: 5 },
-        contentWithBottomTime: { paddingBottom: 18 }, // quand l’heure est en bas-droite
+        contentWithBottomTime: { paddingBottom: 18 },
 
         header: {
           flexDirection: 'row',
@@ -69,29 +66,24 @@ const MessageBubble: React.FC<{
 
         info: { color: msg.isSent ? theme.textColored : theme.text, fontSize: 11, opacity: 0.75 },
 
-        textBox: { position: 'relative', width: '100%' }, // prend toute la largeur de la bulle
+        textBox: { position: 'relative', width: '100%' },
 
-        // Heure en bas-droite du Card.Content (mode non-inline)
         timeBottomRight: { position: 'absolute', right: 8, bottom: 6, zIndex: 1 },
 
-        // Ligne finale en "row" quand ça tient
         lastLineRow: {
           flexDirection: 'row',
           alignItems: 'flex-end',
           width: '100%',
         },
         lastLineTextWrap: {
-          flex: 1,            // occupe tout l'espace restant
-          paddingRight: GAP,  // l'écart visuel avec l'heure
+          flex: 1,
+          paddingRight: GAP,
         },
         lastLineText: {
           color: msg.isSent ? theme.textColored : theme.text,
           fontSize: 14,
-          // flexShrink: 1,
-          // garantit qu'elle reste sur 1 ligne car on sait que ça tient
         },
         timeInlineLabel: {
-          // label d’heure à droite de la dernière ligne
           marginLeft: 0,
         },
       }),
@@ -103,8 +95,6 @@ const MessageBubble: React.FC<{
     showTime && !canInlineTime ? styles.contentWithBottomTime : null,
   ];
 
-  // Helper pour rendre soit le bloc "split" (autres lignes + dernière ligne avec heure),
-  // soit le bloc standard (texte complet).
   const renderTextBlock = () => {
     if (showTime && canInlineTime && lineTexts && lineTexts.length > 0) {
       const last = lineTexts[lineTexts.length - 1];
@@ -135,7 +125,6 @@ const MessageBubble: React.FC<{
       );
     }
 
-    // Bloc standard : on mesure ici les lignes et la dernière largeur
     return (
       <PaperText
         style={styles.text}
@@ -170,7 +159,6 @@ const MessageBubble: React.FC<{
             {renderTextBlock()}
           </View>
 
-          {/* Heure en bas-droite si ça ne tient pas en dernière ligne */}
           {showTime && !canInlineTime && (
             <PaperText
               style={[styles.info, styles.timeBottomRight]}

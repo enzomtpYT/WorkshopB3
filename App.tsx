@@ -37,7 +37,9 @@ import type { MaterialYouPalette } from 'react-native-material-you-colors';
 import { broadcastListener } from './BroadcastListener';
 import MessageBubble from './MessageBubble';
 import { computeShowTimestampFlags } from './ShowTimestamp';
+import { sqliteService, Message } from './src/database/SQLiteService';
 
+// GARDER: La fonction extractSenderAndBody de main
 function extractSenderAndBody(raw: string): { sender?: string; body: string } {
   try {
     const obj = JSON.parse(raw);
@@ -50,6 +52,7 @@ function extractSenderAndBody(raw: string): { sender?: string; body: string } {
       return { sender: senderGuess, body: (obj as any).message };
     }
   } catch {
+    // Ignore parsing errors and fall back to regex
   }
 
   const m = raw.match(/^\s*([^:\n]{1,64})\s*:\s*(.+)$/s);
@@ -68,6 +71,7 @@ function generateTheme(palette: MaterialYouPalette) {
     textColored: palette.system_accent1[2],
     background: palette.system_neutral1[1],
     card: palette.system_accent2[2],
+    icon: palette.system_accent1[10],
   };
   const dark: typeof light = {
     isDark: true,
@@ -76,26 +80,30 @@ function generateTheme(palette: MaterialYouPalette) {
     textColored: palette.system_accent1[9],
     background: palette.system_neutral1[11],
     card: palette.system_accent2[10],
+    icon: palette.system_accent1[3],
   };
   return { light, dark };
 }
 
 export const { ThemeProvider, useMaterialYouTheme } =
   MaterialYou.createThemeContext(generateTheme);
+
+function formatHHMM(date: Date = new Date()): string {
+  const h = date.getHours().toString().padStart(2, '0');
+  const m = date.getMinutes().toString().padStart(2, '0');
+  return `${h}:${m}`;
+}
+
 const USERNAME_STORAGE_KEY = 'broadcast_username';
 
 interface AppState {
   inputText: string;
-  receivedMessages: Array<{
-    message: string;
-    timestamp: number;
-    sender: string;
-    isSent?: boolean;
-  }>;
+  receivedMessages: Message[];
   isListening: boolean;
   ownIpAddress: string | null;
-  username: string;
   showSettings: boolean;
+  username: string;
+  isDatabaseInitialized: boolean;
   activeTab: number;
 }
 
@@ -107,17 +115,47 @@ class App extends Component<{}, AppState> {
     ownIpAddress: null,
     username: '',
     showSettings: false,
+    isDatabaseInitialized: false,
     activeTab: 0,
   };
 
-  componentDidMount() {
+  async componentDidMount() {
+    await this.initializeDatabase(); 
     this.startBroadcastListener();
     this.loadUsername();
+    this.loadMessages(); 
   }
 
-  componentWillUnmount() {
+  async componentWillUnmount() {
     broadcastListener.cleanup();
+    await sqliteService.close(); 
   }
+
+  formatHHMM = (date: Date = new Date()): string => {
+    const h = date.getHours().toString().padStart(2, '0');
+    const m = date.getMinutes().toString().padStart(2, '0');
+    return `${h}:${m}`;
+  };
+
+  initializeDatabase = async () => {
+    try {
+      await sqliteService.init();
+      this.setState({ isDatabaseInitialized: true });
+      console.log('SQLite database initialized');
+    } catch (error) {
+      console.error('Failed to initialize database:', error);
+    }
+  };
+
+  loadMessages = async () => {
+    try {
+      if (!this.state.isDatabaseInitialized) return;
+      const messages = await sqliteService.getAllMessages();
+      this.setState({ receivedMessages: messages });
+    } catch (error) {
+      console.error('Failed to load messages:', error);
+    }
+  };
 
   loadUsername = async () => {
     try {
@@ -141,23 +179,36 @@ class App extends Component<{}, AppState> {
   startBroadcastListener = async () => {
     try {
       await broadcastListener.startListening(
-        (message: string, senderInfo: any) => {
-          const { sender: parsedSender, body } = extractSenderAndBody(message);
+        async (message: string, senderInfo: any) => {
+          try {
+            // Utiliser extractSenderAndBody de main
+            const { sender: parsedSender, body } = extractSenderAndBody(message);
+            
+            // Sauvegarder en base avec SQLite
+            const messageId = await sqliteService.saveMessage({
+              message: body, // Utiliser body au lieu de message
+              timestamp: this.formatHHMM(new Date()),
+              sender: parsedSender || senderInfo?.username || senderInfo?.name || senderInfo?.address || 'Unknown',
+              isSent: false,
+              senderIp: senderInfo.address,
+            });
 
-          const newMessage = {
-            message: body,
-            timestamp: Date.now(),
-            sender:
-              parsedSender ||
-              senderInfo?.username ||
-              senderInfo?.name ||
-              senderInfo?.address ||
-              'Unknown',
-          };
+            // Créer le message pour l'état
+            const newMessage: Message = {
+              _id: messageId,
+              message: body,
+              timestamp: this.formatHHMM(new Date()),
+              sender: parsedSender || senderInfo?.username || senderInfo?.name || senderInfo?.address || 'Unknown',
+              isSent: false,
+              senderIp: senderInfo.address,
+            };
 
-          this.setState(prev => ({
-            receivedMessages: [...prev.receivedMessages, newMessage],
-          }));
+            this.setState((prev) => ({
+              receivedMessages: [...prev.receivedMessages, newMessage],
+            }));
+          } catch (error) {
+            console.error('Failed to save received message:', error);
+          }
         },
       );
 
@@ -169,12 +220,22 @@ class App extends Component<{}, AppState> {
     }
   };
 
-  clearMessages = () => {
-    this.setState({ receivedMessages: [] });
+  stopBroadcastListener = () => {
+    broadcastListener.stopListening();
+    this.setState({ isListening: false });
+  };
+
+  clearMessages = async () => {
+    try {
+      await sqliteService.clearAllMessages();
+      this.setState({ receivedMessages: [] });
+    } catch (error) {
+      console.error('Failed to clear messages:', error);
+    }
   };
 
   toggleSettings = () => {
-    this.setState(prev => ({ showSettings: !prev.showSettings }));
+    this.setState((prev) => ({ showSettings: !prev.showSettings }));
   };
 
   saveUsername = (newUsername: string) => {
@@ -189,14 +250,24 @@ class App extends Component<{}, AppState> {
   sendMsg = async () => {
     if (this.state.inputText.trim()) {
       try {
-        const sentMessage = {
+        // Sauvegarder en base de données
+        const messageId = await sqliteService.saveMessage({
           message: this.state.inputText.trim(),
-          timestamp: Date.now(),
+          timestamp: this.formatHHMM(new Date()),
+          sender: 'You',
+          isSent: true,
+        });
+
+        // Créer le message pour l'état
+        const sentMessage: Message = {
+          _id: messageId,
+          message: this.state.inputText.trim(),
+          timestamp: this.formatHHMM(new Date()),
           sender: 'You',
           isSent: true,
         };
 
-        this.setState(prev => ({
+        this.setState((prev) => ({
           receivedMessages: [...prev.receivedMessages, sentMessage],
         }));
 
@@ -267,12 +338,7 @@ const AppContent: React.FC<{
   inputText: string;
   onTextChange: (text: string) => void;
   sendMsg: () => void;
-  receivedMessages: Array<{
-    message: string;
-    timestamp: number;
-    sender: string;
-    isSent?: boolean;
-  }>;
+  receivedMessages: Message[];
   isListening: boolean;
   onClearMessages: () => void;
   ownIpAddress: string | null;
@@ -293,19 +359,14 @@ const AppContent: React.FC<{
   const [keyboardVisible, setKeyboardVisible] = React.useState(false);
   const insets = useSafeAreaInsets();
 
-  // ⚠️ Calcul des flags (re-mémorisé)
   const showFlags = useMemo(
     () => computeShowTimestampFlags(receivedMessages),
     [receivedMessages],
   );
 
   useEffect(() => {
-    const show = Keyboard.addListener('keyboardDidShow', () =>
-      setKeyboardVisible(true),
-    );
-    const hide = Keyboard.addListener('keyboardDidHide', () =>
-      setKeyboardVisible(false),
-    );
+    const show = Keyboard.addListener('keyboardDidShow', () => setKeyboardVisible(true));
+    const hide = Keyboard.addListener('keyboardDidHide', () => setKeyboardVisible(false));
     return () => {
       show.remove();
       hide.remove();
@@ -348,7 +409,6 @@ const AppContent: React.FC<{
     ipText: { color: theme.text, fontSize: 12, opacity: 0.7 },
   });
 
-  // ------- Auto-scroll + suivi clavier -------
   const scrollViewRef = useRef<ScrollView | null>(null);
   const [autoScroll, setAutoScroll] = useState(true);
 
@@ -394,26 +454,18 @@ const AppContent: React.FC<{
         <View style={styles.statusContainer}>
           <View style={styles.statusInfo}>
             <PaperText style={styles.statusText}>
-              Status:{' '}
-              {isListening ? 'Listening for broadcasts' : 'Not listening'}
+              Status: {isListening ? 'Listening for broadcasts' : 'Not listening'}
             </PaperText>
             {ownIpAddress && (
               <PaperText style={styles.ipText}>
                 Device IP: {ownIpAddress} (messages from this IP are filtered)
               </PaperText>
             )}
-            {username ? (
-              <PaperText style={styles.ipText}>Username: {username}</PaperText>
-            ) : null}
+            {username ? <PaperText style={styles.ipText}>Username: {username}</PaperText> : null}
           </View>
 
           <View style={styles.buttonContainer}>
-            <IconButton
-              icon="cog"
-              size={20}
-              onPress={onOpenSettings}
-              iconColor={theme.primary}
-            />
+            <IconButton icon="cog" size={20} onPress={onOpenSettings} iconColor={theme.primary} />
             <Button
               mode="outlined"
               onPress={onClearMessages}
@@ -434,9 +486,7 @@ const AppContent: React.FC<{
           keyboardShouldPersistTaps="handled"
         >
           {receivedMessages.length === 0 ? (
-            <PaperText style={styles.statusText}>
-              No broadcast messages received yet...
-            </PaperText>
+            <PaperText style={styles.statusText}>No broadcast messages received yet...</PaperText>
           ) : (
             receivedMessages.map((msg, index) => (
               <MessageBubble
@@ -460,16 +510,10 @@ const AppContent: React.FC<{
           textColor={theme.text}
           outlineColor={theme.primary}
           activeOutlineColor={theme.primary}
-          placeholder={
-            username
-              ? `${username}: Enter your message...`
-              : 'Enter your message...'
-          }
+          placeholder={username ? `${username}: Enter your message...` : 'Enter your message...'}
           onFocus={() => {
             if (autoScroll) {
-              requestAnimationFrame(() =>
-                scrollViewRef.current?.scrollToEnd({ animated: true }),
-              );
+              requestAnimationFrame(() => scrollViewRef.current?.scrollToEnd({ animated: true }));
             }
           }}
         />
@@ -486,7 +530,6 @@ const AppContent: React.FC<{
   );
 };
 
-// Bluetooth Tab Component
 const BluetoothContent: React.FC<{ username: string }> = ({ username }) => {
   const theme = useMaterialYouTheme();
   const insets = useSafeAreaInsets();
@@ -546,7 +589,6 @@ const BluetoothContent: React.FC<{ username: string }> = ({ username }) => {
   );
 };
 
-// Settings Modal Component
 const SettingsModal: React.FC<{
   visible: boolean;
   username: string;
@@ -591,22 +633,13 @@ const SettingsModal: React.FC<{
       textAlign: 'center',
     },
     input: { marginBottom: 20, backgroundColor: theme.card },
-    buttonContainer: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      gap: 10,
-    },
+    buttonContainer: { flexDirection: 'row', justifyContent: 'space-between', gap: 10 },
     button: { flex: 1 },
     modalScrollContent: { paddingBottom: 8 },
   });
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
-    >
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={modalStyles.modalOverlay}>
         <View style={modalStyles.modalContent}>
           <ScrollView contentContainerStyle={modalStyles.modalScrollContent}>
@@ -625,11 +658,7 @@ const SettingsModal: React.FC<{
             />
 
             <View style={modalStyles.buttonContainer}>
-              <Button
-                mode="outlined"
-                onPress={onClose}
-                style={modalStyles.button}
-              >
+              <Button mode="outlined" onPress={onClose} style={modalStyles.button}>
                 Cancel
               </Button>
               <Button
