@@ -51,6 +51,7 @@ import { sqliteService, Message } from './src/database/SQLiteService';
 import { cryptoService } from './src/crypto/CryptoService';
 import CustomToast from './src/components/CustomToast';
 import { toastService } from './src/services/ToastService';
+import { AuthenticationScreen } from './src/screens/AuthenticationScreen';
 
 // Helper : extrait {sender, body} à partir du message brut
 function extractSenderAndBody(raw: string): { sender?: string; body: string } {
@@ -125,6 +126,7 @@ interface AppState {
   encryptionMode: boolean; // NOUVEAU: Mode chiffrement activé
   recipientPassword: string; // NOUVEAU: Mot de passe du destinataire
   showEncryptionSettings: boolean; // NOUVEAU: Modal paramètres crypto
+  isAuthenticated: boolean; // État d'authentification de l'utilisateur
 }
 
 class App extends Component<{}, AppState> {
@@ -141,6 +143,7 @@ class App extends Component<{}, AppState> {
     encryptionMode: false,
     recipientPassword: '',
     showEncryptionSettings: false,
+    isAuthenticated: false, // Ajouter l'état d'authentification
   };
 
   async componentDidMount() {
@@ -504,23 +507,34 @@ class App extends Component<{}, AppState> {
       <SafeAreaProvider>
         <PaperProvider>
           <ThemeProvider>
-            <BottomNavigation
-              navigationState={{ index: this.state.activeTab, routes }}
-              onIndexChange={this.handleTabChange}
-              renderScene={renderScene}
-            />
-            <SettingsModal
-              visible={this.state.showSettings}
-              username={this.state.username}
-              onClose={this.toggleSettings}
-              onSave={this.saveUsername}
-            />
-            <EncryptionSettingsModal
-              visible={this.state.showEncryptionSettings}
-              userPassword={this.state.userPassword}
-              onClose={this.closeEncryptionSettings}
-              onSave={this.saveUserPassword}
-            />
+            {!this.state.isAuthenticated ? (
+              <AuthenticationScreen
+                onAuthenticationSuccess={() => {
+                  this.setState({ isAuthenticated: true });
+                  console.log('Authentification réussie');
+                }}
+              />
+            ) : (
+              <>
+                <BottomNavigation
+                  navigationState={{ index: this.state.activeTab, routes }}
+                  onIndexChange={this.handleTabChange}
+                  renderScene={renderScene}
+                />
+                <SettingsModal
+                  visible={this.state.showSettings}
+                  username={this.state.username}
+                  onClose={this.toggleSettings}
+                  onSave={this.saveUsername}
+                />
+                <EncryptionSettingsModal
+                  visible={this.state.showEncryptionSettings}
+                  userPassword={this.state.userPassword}
+                  onClose={this.closeEncryptionSettings}
+                  onSave={this.saveUserPassword}
+                />
+              </>
+            )}
             <CustomToast />
           </ThemeProvider>
         </PaperProvider>
@@ -586,7 +600,7 @@ const AppContent: React.FC<{
     };
   }, []);
 
-  const styles = createAppContentStyles(theme, insets);
+  const styles = createAppContentStyles(theme, insets, keyboardVisible);
 
   // ------- Auto-scroll + suivi clavier -------
   const scrollViewRef = useRef<ScrollView | null>(null);

@@ -1,11 +1,32 @@
 import { StyleSheet } from 'react-native';
 
-export const createAppContentStyles = (theme: any, insets: any) =>
+export const createAppContentStyles = (theme: any, insets: any, keyboardVisible: boolean) =>
   StyleSheet.create({
+    sendButton: {
+      padding: 8,
+      marginLeft: 8,
+      borderRadius: 20,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    sendButtonEnabled: {
+      backgroundColor: theme.primary,
+    },
+    sendButtonDisabled: {
+      backgroundColor: '#ccc',
+    },
+    sendButtonText: {
+      color: '#fff',
+      fontSize: 14,
+    },
+    flexContainer: {
+      flex: 1,
+    },
     container: {
       flex: 1,
       paddingTop: insets.top,
       paddingBottom: 0,
+
     },
     input: { 
       flex: 1, 
@@ -15,15 +36,17 @@ export const createAppContentStyles = (theme: any, insets: any) =>
       flexDirection: 'row',
       alignItems: 'center',
       gap: 10,
-      marginBottom: 10,
       paddingHorizontal: 20,
-      paddingBottom: 10,
+      paddingVertical: keyboardVisible ? 5 : 10,
+      backgroundColor: theme.background,
+      borderTopWidth: 1,
+      borderTopColor: theme.card,
     },
     messagesContainer: {
       flex: 1,
       paddingTop: 20,
       paddingHorizontal: 20,
-      paddingBottom: 0,
+      paddingBottom: keyboardVisible ? 60 : 20,
     },
     statusContainer: {
       flexDirection: 'row',
@@ -55,7 +78,6 @@ export const createAppContentStyles = (theme: any, insets: any) =>
       fontSize: 12, 
       opacity: 0.7 
     },
-        // AJOUTER: Styles crypto
     encryptionContainer: {
       paddingHorizontal: 20,
       paddingVertical: 10,
@@ -89,5 +111,5 @@ export const createAppContentStyles = (theme: any, insets: any) =>
     },
     inactiveIcon: {
       opacity: 0.7,
-    },
+    }
   });
