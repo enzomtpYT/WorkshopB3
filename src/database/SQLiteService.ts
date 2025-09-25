@@ -24,6 +24,7 @@ export interface Message {
   decryptionFailed?: boolean;   // Indique si le déchiffrement a échoué
   originalEncrypted?: string;   // Le message chiffré original pour déchiffrement ultérieur
   originalMessage?: string;     // Le message original non chiffré (pour les messages envoyés)
+  lastUpdated?: number;         // Timestamp de dernière mise à jour (pour forcer le re-render)
 }
 
 class SQLiteService {
@@ -31,7 +32,7 @@ class SQLiteService {
 
   async executeQuery(query: string, params: any[] = []): Promise<SQLiteResult> {
     if (!this.db) {
-      console.log('trop tôt');
+      await this.init();
     }
 
     try {
@@ -72,13 +73,12 @@ class SQLiteService {
         const missingColumns = requiredColumns.filter(col => !existingColumns.includes(col));
 
         if (missingColumns.length > 0) {
-          console.log(`Table incomplete, missing columns: ${missingColumns.join(', ')}`);
-          console.log('Dropping and recreating table...');
+
           
           // Supprimer la table incomplète
           await this.db.executeSql('DROP TABLE IF EXISTS messages');
         } else {
-          console.log('Table messages is complete, no need to recreate');
+
           return; // Table complète, rien à faire
         }
       }
@@ -107,7 +107,7 @@ class SQLiteService {
       )`
     );
 
-      console.log('Database initialized successfully');
+
     } catch (error) {
       console.error('Database initialization error:', error);
       throw error;
@@ -142,7 +142,7 @@ class SQLiteService {
         ]
       );
 
-      console.log('Message saved successfully');
+
       return id;
     } catch (error) {
       console.error('Save message error:', error);
@@ -189,6 +189,36 @@ class SQLiteService {
     }
   }
 
+  async updateMessage(messageId: string, updates: Partial<Omit<Message, '_id'>>): Promise<void> {
+    if (!this.db) {
+      await this.init();
+    }
+
+    try {
+      const setParts: string[] = [];
+      const params: any[] = [];
+
+      // Construire dynamiquement la requête UPDATE
+      Object.entries(updates).forEach(([key, value]) => {
+        setParts.push(`${key} = ?`);
+        params.push(value);
+      });
+
+      if (setParts.length === 0) {
+        return; // Rien à mettre à jour
+      }
+
+      const query = `UPDATE messages SET ${setParts.join(', ')} WHERE id = ?`;
+      params.push(messageId);
+
+      await this.db!.executeSql(query, params);
+
+    } catch (error) {
+      console.error('Update message error:', error);
+      throw error;
+    }
+  }
+
   async clearAllMessages(): Promise<void> {
     if (!this.db) {
       await this.init();
@@ -196,7 +226,7 @@ class SQLiteService {
 
     try {
       await this.db!.executeSql('DELETE FROM messages');
-      console.log('All messages cleared');
+
     } catch (error) {
       console.error('Clear messages error:', error);
       throw error;
@@ -211,7 +241,7 @@ class SQLiteService {
     try {
       await this.db.close();
       this.db = null;
-      console.log('Database closed');
+
     } catch (error) {
       console.error('Database close error:', error);
       throw error;

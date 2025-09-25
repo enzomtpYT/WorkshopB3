@@ -36,20 +36,13 @@ class AuthenticationService {
 
   async registerUser(username: string, encryptionKey: string): Promise<boolean> {
     try {
-      console.log('Début de l\'enregistrement pour:', username);
       const macAddress = await this.getMacAddress();
-      console.log('Adresse MAC obtenue:', macAddress);
-      
       const hashedKey = await this.cryptoService.hash(encryptionKey);
-      console.log('Clé hashée générée');
-      
-      console.log('Tentative d\'insertion dans la base de données...');
       await sqliteService.executeQuery(
         'INSERT OR REPLACE INTO users (mac_address, username, encryption_key) VALUES (?, ?, ?)',
         [macAddress, username, hashedKey]
       );
-      
-      console.log('Enregistrement réussi !');
+
       return true;
     } catch (error) {
       console.error('Erreur lors de l\'enregistrement:', error);

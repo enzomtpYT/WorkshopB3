@@ -128,38 +128,60 @@ interface AppState {
   isAuthenticated: boolean; // État d'authentification de l'utilisateur
   showDecryptionModal: boolean; // Modal de déchiffrement
   pendingEncryptedMessage: string | null; // Message en attente de déchiffrement
+  pendingMessageId: string | null; // ID du message en cours de déchiffrement
 }
 
 class App extends Component<{}, AppState> {
   // Méthode pour gérer un message déchiffré
   handleDecryptedMessage = (decryptedText: string | null) => {
-    if (!decryptedText || !this.state.pendingEncryptedMessage) {
+    if (!decryptedText || !this.state.pendingEncryptedMessage || !this.state.pendingMessageId) {
       return;
     }
 
     // Analyser le message déchiffré
     const { sender, body } = extractSenderAndBody(decryptedText);
     
-    const messageToSave: Omit<Message, '_id'> = {
-      message: body,
-      timestamp: Date.now(),
-      sender: sender || 'Inconnu',
-      isSent: false,
-      senderIp: '',
-      isEncrypted: true,
-      decryptionFailed: false
+    // Trouver le message à mettre à jour
+    const messageIndex = this.state.receivedMessages.findIndex(
+      msg => msg._id === this.state.pendingMessageId
+    );
+    
+    if (messageIndex === -1) {
+      console.error('Message to update not found');
+      return;
+    }
+
+    // Créer le message mis à jour
+    const updatedMessage = {
+      ...this.state.receivedMessages[messageIndex],
+      message: body, // Le contenu déchiffré
+      sender: sender || this.state.receivedMessages[messageIndex].sender, // Garder l'expéditeur original si pas dans le message déchiffré
+      isEncrypted: false, // Plus chiffré maintenant
+      decryptionFailed: false,
+      lastUpdated: Date.now() // Forcer le re-render
     };
 
-    // Sauvegarder le message déchiffré
-    sqliteService.saveMessage(messageToSave).then(messageId => {
-      this.setState(prev => ({
-        receivedMessages: [...prev.receivedMessages, { 
-          ...messageToSave, 
-          _id: messageId 
-        }],
-        showDecryptionModal: false,
-        pendingEncryptedMessage: null
-      }));
+    // Mettre à jour en base de données
+    sqliteService.updateMessage(this.state.pendingMessageId, {
+      message: body,
+      sender: updatedMessage.sender,
+      isEncrypted: false,
+      decryptionFailed: false
+    }).then(() => {
+      // Mettre à jour l'état local
+      this.setState(prev => {
+        const newMessages = [...prev.receivedMessages];
+        newMessages[messageIndex] = updatedMessage;
+        
+        return {
+          receivedMessages: newMessages,
+          showDecryptionModal: false,
+          pendingEncryptedMessage: null,
+          pendingMessageId: null
+        };
+      });
+    }).catch((error: any) => {
+      console.error('Failed to update message in database:', error);
     });
   };
 
@@ -178,7 +200,8 @@ class App extends Component<{}, AppState> {
     showEncryptionSettings: false,
     isAuthenticated: false,
     showDecryptionModal: false,
-    pendingEncryptedMessage: null
+    pendingEncryptedMessage: null,
+    pendingMessageId: null
   };
 
   async componentDidMount() {
@@ -204,7 +227,7 @@ class App extends Component<{}, AppState> {
     try {
       await sqliteService.init();
       this.setState({ isDatabaseInitialized: true });
-      console.log('Database initialized successfully');
+
     } catch (error) {
       console.error('Failed to initialize database:', error);
       Alert.alert('Error', 'Failed to initialize database');
@@ -299,19 +322,14 @@ class App extends Component<{}, AppState> {
         // Si le mode chiffrement est activé
         if (this.state.encryptionMode && this.state.recipientPassword) {
           try {
-            console.log('Encrypting message:', this.state.inputText.trim(), 'with password length:', this.state.recipientPassword.length);
-            
             const encryptedData = cryptoService.encryptMessage(
               messageToSend,
               this.state.recipientPassword,
               'recipient', // Ou le username du destinataire si vous l'avez
             );
 
-            console.log('Encrypted data:', encryptedData);
-
             // Message à envoyer (JSON chiffré)
             messageToSend = JSON.stringify(encryptedData);
-            console.log('Message to send (JSON):', messageToSend);
             
             isEncrypted = true;
             encryptionTarget = 'recipient';
@@ -492,22 +510,12 @@ class App extends Component<{}, AppState> {
   };
 
   handleEncryptedMessage = (_message: Message): void => {
-    console.log('handleEncryptedMessage called with:', {
-      isEncrypted: _message.isEncrypted,
-      hasOriginalEncrypted: !!_message.originalEncrypted,
-      originalEncrypted: _message.originalEncrypted,
-      messageContent: _message.message
-    });
-    
     if (_message.isEncrypted && _message.originalEncrypted) {
-      // Utiliser TOUJOURS le message chiffré original pour les messages reçus
-      console.log('Opening decryption modal with message:', _message.originalEncrypted);
       this.setState({
         showDecryptionModal: true,
-        pendingEncryptedMessage: _message.originalEncrypted
+        pendingEncryptedMessage: _message.originalEncrypted,
+        pendingMessageId: _message._id
       });
-    } else {
-      console.log('Cannot decrypt: missing originalEncrypted or not encrypted');
     }
   };
 
@@ -570,7 +578,7 @@ class App extends Component<{}, AppState> {
               <AuthenticationScreen
                 onAuthenticationSuccess={() => {
                   this.setState({ isAuthenticated: true });
-                  console.log('Authentification réussie');
+
                 }}
               />
             ) : (
@@ -598,7 +606,8 @@ class App extends Component<{}, AppState> {
                   onDecrypted={this.handleDecryptedMessage}
                   onClose={() => this.setState({ 
                     showDecryptionModal: false,
-                    pendingEncryptedMessage: null 
+                    pendingEncryptedMessage: null,
+                    pendingMessageId: null
                   })}
                 />
               </>
@@ -763,7 +772,7 @@ const AppContent: React.FC<{
           ) : (
             receivedMessages.map((msg, index) => (
               <MessageBubble
-                key={index}
+                key={`${msg._id}-${msg.lastUpdated || msg.timestamp}`}
                 msg={msg}
                 showTime={showFlags[index]}
                 theme={theme}

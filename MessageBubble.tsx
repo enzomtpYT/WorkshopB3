@@ -42,6 +42,8 @@ const MessageBubble: React.FC<{
     timeWidth > 0 &&
     lastLineWidth + GAP + timeWidth <= textBoxWidth;
 
+
+
   const styles = React.useMemo(
     () => createMessageBubbleStyles(msg, theme),
     [msg, theme],
@@ -102,15 +104,7 @@ const MessageBubble: React.FC<{
       <TouchableOpacity 
         style={[styles.card, msg.isEncrypted && !msg.isSent && styles.encryptedCard]} 
         onPress={() => {
-          console.log('MessageBubble click:', {
-            isEncrypted: msg.isEncrypted,
-            isSent: msg.isSent,
-            sender: msg.sender,
-            message: msg.message,
-            decryptionFailed: msg.decryptionFailed
-          });
           if (msg.isEncrypted && !msg.isSent && onEncryptedMessagePress) {
-            console.log('Calling onEncryptedMessagePress');
             onEncryptedMessagePress(msg);
           }
         }}
