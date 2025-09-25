@@ -509,8 +509,9 @@ class App extends Component<{}, AppState> {
           <ThemeProvider>
             {!this.state.isAuthenticated ? (
               <AuthenticationScreen
-                onAuthenticationSuccess={() => {
+                onAuthenticationSuccess={(username: string) => {
                   this.setState({ isAuthenticated: true });
+                  this.saveUsername(username);
                   console.log('Authentification réussie');
                 }}
               />

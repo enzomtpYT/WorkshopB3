@@ -12,7 +12,7 @@ import AuthenticationService from '../services/AuthenticationService';
 import { useMaterialYouTheme } from '../../App';
 
 interface AuthenticationScreenProps {
-  onAuthenticationSuccess: () => void;
+  onAuthenticationSuccess: (username: string) => void;
 }
 
 export const AuthenticationScreen: React.FC<AuthenticationScreenProps> = ({ onAuthenticationSuccess }) => {
@@ -44,14 +44,14 @@ export const AuthenticationScreen: React.FC<AuthenticationScreenProps> = ({ onAu
         const success = await AuthenticationService.registerUser(username, encryptionKey);
         if (success) {
           Alert.alert('Succès', 'Enregistrement réussi');
-          onAuthenticationSuccess();
+          onAuthenticationSuccess(username);
         } else {
           setError('Erreur lors de l\'enregistrement');
         }
       } else {
         const isValid = await AuthenticationService.verifyUser(username, encryptionKey);
         if (isValid) {
-          onAuthenticationSuccess();
+          onAuthenticationSuccess(username);
         } else {
           setError('Nom d\'utilisateur ou clé d\'encryption invalide');
         }
