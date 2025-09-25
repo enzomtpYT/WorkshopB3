@@ -9,8 +9,18 @@ export const createMessageBubbleStyles = (msg: any, theme: any) =>
     },
     card: {
       maxWidth: '80%',
+      minWidth: 80,
       backgroundColor: msg.isSent ? theme.primary : theme.card,
       alignSelf: msg.isSent ? 'flex-end' : 'flex-start',
+      elevation: msg.isEncrypted ? 4 : 1,
+      opacity: msg.decryptionFailed ? 0.7 : 1,
+      borderRadius: 12,
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+    },
+    encryptedCard: {
+      borderWidth: 1,
+      borderColor: theme.primary,
     },
     content: { 
       paddingBottom: 6, 
@@ -76,6 +86,20 @@ export const createMessageBubbleStyles = (msg: any, theme: any) =>
       opacity: 0.9,
       fontWeight: 'bold',
       marginBottom: 4,
+    },
+    
+    // Styles pour l'icône de cadenas des messages envoyés chiffrés
+    encryptedMessageContainer: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+    },
+    lockIcon: {
+      color: msg.isSent ? theme.textColored : theme.text,
+      fontSize: 14,
+      marginRight: 4,
+    },
+    messageTextWithIcon: {
+      flex: 1,
     },
 
   });

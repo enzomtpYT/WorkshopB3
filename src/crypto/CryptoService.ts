@@ -53,7 +53,7 @@ export class CryptoService {
 
       // Générer un tag d'authentification HMAC
       const authTag = CryptoJS.HmacSHA256(
-        encrypted.ciphertext.toString() + iv.toString(),
+        encrypted.ciphertext.toString(CryptoJS.enc.Base64) + iv.toString(CryptoJS.enc.Base64),
         key
       ).toString();
 

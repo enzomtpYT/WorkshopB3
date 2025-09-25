@@ -52,6 +52,7 @@ import { cryptoService } from './src/crypto/CryptoService';
 import CustomToast from './src/components/CustomToast';
 import { toastService } from './src/services/ToastService';
 import { AuthenticationScreen } from './src/screens/AuthenticationScreen';
+import { DecryptionModal } from './src/components/DecryptionModal';
 
 // Helper : extrait {sender, body} à partir du message brut
 function extractSenderAndBody(raw: string): { sender?: string; body: string } {
@@ -127,9 +128,65 @@ interface AppState {
   recipientPassword: string; // NOUVEAU: Mot de passe du destinataire
   showEncryptionSettings: boolean; // NOUVEAU: Modal paramètres crypto
   isAuthenticated: boolean; // État d'authentification de l'utilisateur
+  showDecryptionModal: boolean; // Modal de déchiffrement
+  pendingEncryptedMessage: string | null; // Message en attente de déchiffrement
+  pendingMessageId: string | null; // ID du message en cours de déchiffrement
 }
 
 class App extends Component<{}, AppState> {
+  // Méthode pour gérer un message déchiffré
+  handleDecryptedMessage = (decryptedText: string | null) => {
+    if (!decryptedText || !this.state.pendingEncryptedMessage || !this.state.pendingMessageId) {
+      return;
+    }
+
+    // Analyser le message déchiffré
+    const { sender, body } = extractSenderAndBody(decryptedText);
+    
+    // Trouver le message à mettre à jour
+    const messageIndex = this.state.receivedMessages.findIndex(
+      msg => msg._id === this.state.pendingMessageId
+    );
+    
+    if (messageIndex === -1) {
+      console.error('Message to update not found');
+      return;
+    }
+
+    // Créer le message mis à jour
+    const updatedMessage = {
+      ...this.state.receivedMessages[messageIndex],
+      message: body, // Le contenu déchiffré
+      sender: sender || this.state.receivedMessages[messageIndex].sender, // Garder l'expéditeur original si pas dans le message déchiffré
+      isEncrypted: false, // Plus chiffré maintenant
+      decryptionFailed: false,
+      lastUpdated: Date.now() // Forcer le re-render
+    };
+
+    // Mettre à jour en base de données
+    sqliteService.updateMessage(this.state.pendingMessageId, {
+      message: body,
+      sender: updatedMessage.sender,
+      isEncrypted: false,
+      decryptionFailed: false
+    }).then(() => {
+      // Mettre à jour l'état local
+      this.setState(prev => {
+        const newMessages = [...prev.receivedMessages];
+        newMessages[messageIndex] = updatedMessage;
+        
+        return {
+          receivedMessages: newMessages,
+          showDecryptionModal: false,
+          pendingEncryptedMessage: null,
+          pendingMessageId: null
+        };
+      });
+    }).catch((error: any) => {
+      console.error('Failed to update message in database:', error);
+    });
+  };
+
   state: AppState = {
     inputText: '',
     receivedMessages: [],
@@ -143,7 +200,10 @@ class App extends Component<{}, AppState> {
     encryptionMode: false,
     recipientPassword: '',
     showEncryptionSettings: false,
-    isAuthenticated: false, // Ajouter l'état d'authentification
+    isAuthenticated: false,
+    showDecryptionModal: false,
+    pendingEncryptedMessage: null,
+    pendingMessageId: null
   };
 
   async componentDidMount() {
@@ -151,7 +211,7 @@ class App extends Component<{}, AppState> {
     this.startBroadcastListener();
     this.loadUsername();
     this.loadUserPassword(); // NOUVEAU
-    this.loadMessages();
+    await this.loadMessages(); // Attendre le chargement des messages
   }
 
   async componentWillUnmount() {
@@ -169,23 +229,19 @@ class App extends Component<{}, AppState> {
     try {
       await sqliteService.init();
       this.setState({ isDatabaseInitialized: true });
-      console.log('Database initialized successfully');
+
     } catch (error) {
       console.error('Failed to initialize database:', error);
       toastService.showError('Failed to initialize database');
-    }
-    try {
-      await sqliteService.init();
-      this.setState({ isDatabaseInitialized: true });
-      console.log('SQLite database initialized');
-    } catch (error) {
-      console.error('Failed to initialize database:', error);
     }
   };
 
   loadMessages = async () => {
     try {
-      if (!this.state.isDatabaseInitialized) return;
+      // Attendre que la base soit initialisée si elle ne l'est pas encore
+      if (!this.state.isDatabaseInitialized) {
+        await sqliteService.init();
+      }
       const messages = await sqliteService.getAllMessages();
       this.setState({ receivedMessages: messages });
     } catch (error) {
@@ -262,7 +318,6 @@ class App extends Component<{}, AppState> {
     if (this.state.inputText.trim()) {
       try {
         let messageToSend = this.state.inputText.trim();
-        let messageToStore = messageToSend;
         let isEncrypted = false;
         let encryptionTarget: string | undefined;
 
@@ -277,11 +332,11 @@ class App extends Component<{}, AppState> {
 
             // Message à envoyer (JSON chiffré)
             messageToSend = JSON.stringify(encryptedData);
-            // Message à stocker (texte original + indicateur)
-            messageToStore = `🔒 [Encrypted] ${this.state.inputText.trim()}`;
+            
             isEncrypted = true;
             encryptionTarget = 'recipient';
           } catch (error) {
+            console.error('Encryption error:', error);
             Alert.alert('Encryption Error', 'Failed to encrypt message');
             return;
           }
@@ -289,7 +344,8 @@ class App extends Component<{}, AppState> {
 
         // Sauvegarder en base de données
         const messageId = await sqliteService.saveMessage({
-          message: messageToStore,
+          message: messageToSend, // On stocke le message chiffré
+          originalMessage: isEncrypted ? this.state.inputText.trim() : undefined, // Message original si chiffré
           timestamp: Date.now(),
           sender: 'You',
           isSent: true,
@@ -300,7 +356,9 @@ class App extends Component<{}, AppState> {
         // Créer le message pour l'état
         const sentMessage: Message = {
           _id: messageId,
-          message: messageToStore,
+          message: isEncrypted ? `🔒 ${this.state.inputText.trim()}` : messageToSend, // Texte original avec icône si chiffré
+          originalMessage: isEncrypted ? this.state.inputText.trim() : undefined,
+          originalEncrypted: isEncrypted ? messageToSend : undefined, // Message chiffré pour référence
           timestamp: Date.now(),
           sender: 'You',
           isSent: true,
@@ -331,47 +389,45 @@ class App extends Component<{}, AppState> {
       await broadcastListener.startListening(
         async (message: string, senderInfo: any) => {
           try {
-            // 1) Première extraction côté "clair" (avant déchiffrement)
-            const firstParse = extractSenderAndBody(message);
-            let parsedSender = firstParse.sender; // username s’il est déjà dans l’enveloppe
-            let finalMessage = firstParse.body;
+            // Variables pour le traitement du message
+            let parsedSender: string | undefined; // username s’il est déjà dans l’enveloppe
+            let finalMessage: string;
 
             let isEncrypted = false;
             let decryptionFailed = false;
 
-            // 2) Gestion chiffrage
-            if (
-              cryptoService.isEncryptedMessage(finalMessage) &&
-              this.state.userPassword
-            ) {
-              const encryptedData =
-                cryptoService.parseEncryptedMessage(finalMessage);
+            // 2) D'abord vérifier si le message brut est chiffré
+            if (cryptoService.isEncryptedMessage(message)) {
+              isEncrypted = true;
+              
+              if (this.state.userPassword) {
+                const encryptedData =
+                cryptoService.parseEncryptedMessage(message);
               if (encryptedData) {
-                isEncrypted = true;
                 const decryptionResult = cryptoService.decryptMessage(
                   encryptedData,
                   this.state.userPassword,
                 );
 
                 if (decryptionResult.success) {
-                  finalMessage = decryptionResult.message!;
+                  // Pour les messages reçus, on garde l'indicateur chiffré même si on peut déchiffrer
+                  finalMessage = '🔒 [Message chiffré - touchez pour déchiffrer]';
 
                   // 2.bis) Si on n’avait pas de username AVANT, on re-tente l’extraction APRÈS déchiffrement
-                  if (!parsedSender) {
-                    const afterDecrypt = extractSenderAndBody(finalMessage);
-                    parsedSender = afterDecrypt.sender || parsedSender;
-                    finalMessage = afterDecrypt.body; // on nettoie le corps si format "Alice: ..."/JSON
-                  }
                 } else {
-                  finalMessage = '🔒 [Encrypted message - wrong password]';
-                  decryptionFailed = true;
+                  finalMessage = '🔒 [Message chiffré - touchez pour déchiffrer]';
                 }
+              } else {
+                finalMessage = '🔒 [Message chiffré - touchez pour déchiffrer]';
               }
-            } else if (cryptoService.isEncryptedMessage(finalMessage)) {
-              // Message chiffré mais pas de mot de passe défini
-              finalMessage = '🔒 [Encrypted message - no password set]';
-              isEncrypted = true;
-              decryptionFailed = true;
+              } else {
+                finalMessage = '🔒 [Message chiffré - touchez pour déchiffrer]';
+              }
+            } else {
+              // Message non chiffré - parsing normal
+              const firstParse = extractSenderAndBody(message);
+              parsedSender = firstParse.sender;
+              finalMessage = firstParse.body;
             }
 
             // 3) Détermination du "sender" à afficher (username prioritaire)
@@ -384,7 +440,8 @@ class App extends Component<{}, AppState> {
 
             // 4) Sauvegarde SQLite
             const messageId = await sqliteService.saveMessage({
-              message: finalMessage,
+              message: finalMessage, // Le message déjà déchiffré ou un indicateur de message chiffré
+              originalEncrypted: isEncrypted ? message : undefined, // Le message chiffré original
               timestamp: Date.now(),
               sender: displaySender,
               isSent: false,
@@ -403,6 +460,7 @@ class App extends Component<{}, AppState> {
               senderIp: senderInfo?.address,
               isEncrypted,
               decryptionFailed,
+              originalEncrypted: isEncrypted ? message : undefined,
             };
 
             this.setState(prev => ({
@@ -453,6 +511,16 @@ class App extends Component<{}, AppState> {
     this.setState({ inputText: text });
   };
 
+  handleEncryptedMessage = (_message: Message): void => {
+    if (_message.isEncrypted && _message.originalEncrypted) {
+      this.setState({
+        showDecryptionModal: true,
+        pendingEncryptedMessage: _message.originalEncrypted,
+        pendingMessageId: _message._id
+      });
+    }
+  };
+
   onRecipientPasswordChange = (password: string) => {
     this.setState({ recipientPassword: password });
   };
@@ -475,6 +543,7 @@ class App extends Component<{}, AppState> {
       onOpenEncryptionSettings={this.openEncryptionSettings}
       onRecipientPasswordChange={this.onRecipientPasswordChange}
       userPassword={this.state.userPassword}
+      onEncryptedMessagePress={this.handleEncryptedMessage}
     />
   );
 
@@ -534,6 +603,16 @@ class App extends Component<{}, AppState> {
                   onClose={this.closeEncryptionSettings}
                   onSave={this.saveUserPassword}
                 />
+                <DecryptionModal
+                  visible={this.state.showDecryptionModal}
+                  encryptedMessage={this.state.pendingEncryptedMessage || ''}
+                  onDecrypted={this.handleDecryptedMessage}
+                  onClose={() => this.setState({ 
+                    showDecryptionModal: false,
+                    pendingEncryptedMessage: null,
+                    pendingMessageId: null
+                  })}
+                />
               </>
             )}
             <CustomToast />
@@ -561,6 +640,7 @@ const AppContent: React.FC<{
   onOpenEncryptionSettings: () => void;
   onRecipientPasswordChange: (password: string) => void;
   userPassword: string;
+  onEncryptedMessagePress: (message: Message) => void;
 }> = ({
   inputText,
   onTextChange,
@@ -578,6 +658,7 @@ const AppContent: React.FC<{
   onOpenEncryptionSettings,
   onRecipientPasswordChange,
   userPassword,
+  onEncryptedMessagePress,
 }) => {
   const theme = useMaterialYouTheme();
   const [keyboardVisible, setKeyboardVisible] = React.useState(false);
@@ -695,10 +776,11 @@ const AppContent: React.FC<{
           ) : (
             receivedMessages.map((msg, index) => (
               <MessageBubble
-                key={index}
+                key={`${msg._id}-${msg.lastUpdated || msg.timestamp}`}
                 msg={msg}
                 showTime={showFlags[index]}
                 theme={theme}
+                onEncryptedMessagePress={onEncryptedMessagePress}
               />
             ))
           )}
@@ -1014,6 +1096,7 @@ const BluetoothContent: React.FC<{ username: string }> = ({ username }) => {
                 }}
                 showTime={bluetoothShowFlags[index]}
                 theme={theme}
+                onEncryptedMessagePress={_message => {/* Ne rien faire pour les messages Bluetooth */}}
               />
             ))
           )}

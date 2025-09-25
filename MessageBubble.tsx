@@ -1,6 +1,6 @@
 import React from 'react';
-import { View } from 'react-native';
-import { Card, Text as PaperText } from 'react-native-paper';
+import { View, TouchableOpacity } from 'react-native';
+import { Text as PaperText } from 'react-native-paper';
 import { createMessageBubbleStyles } from './style/MessageBubbleStyles';
 import { Message } from './src/database/SQLiteService'; // AJOUTER: Import du bon type
 
@@ -20,10 +20,11 @@ function formatTime(timestamp: number) {
 const GAP = 8;
 
 const MessageBubble: React.FC<{
-  msg: Message; // CHANGER: Utiliser Message
-  showTime: boolean; // tu continues à ne l'afficher que sur le dernier du lot
+  msg: Message;
+  showTime: boolean;
   theme: any;
-}> = ({ msg, showTime, theme }) => {
+  onEncryptedMessagePress?: (message: Message) => void; // Nouveau: callback pour le clic
+}> = ({ msg, showTime, theme, onEncryptedMessagePress }) => {
   const timeStr = formatTime(msg.timestamp); // CHANGER: timestamp est string
 
   // Mesures
@@ -40,6 +41,8 @@ const MessageBubble: React.FC<{
     textBoxWidth > 0 &&
     timeWidth > 0 &&
     lastLineWidth + GAP + timeWidth <= textBoxWidth;
+
+
 
   const styles = React.useMemo(
     () => createMessageBubbleStyles(msg, theme),
@@ -98,10 +101,20 @@ const MessageBubble: React.FC<{
 
   return (
     <View style={styles.wrap}>
-      <Card style={styles.card}>
-        <Card.Content style={contentStyle}>
+      <TouchableOpacity 
+        style={[styles.card, msg.isEncrypted && !msg.isSent && styles.encryptedCard]} 
+        onPress={() => {
+          if (msg.isEncrypted && !msg.isSent && onEncryptedMessagePress) {
+            onEncryptedMessagePress(msg);
+          }
+        }}
+        activeOpacity={msg.isEncrypted && !msg.isSent ? 0.7 : 1}
+      >
+        <View style={contentStyle}>
           {!msg.isSent && (
-            <PaperText style={styles.from}>{msg.sender}</PaperText>
+            <PaperText style={styles.from}>
+              {msg.sender} {msg.isEncrypted && '🔒'}
+            </PaperText>
           )}
 
           <View
@@ -121,8 +134,8 @@ const MessageBubble: React.FC<{
               {timeStr}
             </PaperText>
           )}
-        </Card.Content>
-      </Card>
+        </View>
+      </TouchableOpacity>
     </View>
   );
 };
