@@ -1,6 +1,6 @@
 import { StyleSheet } from 'react-native';
 
-export const authenticationStyles = StyleSheet.create({
+export const createAuthenticationStyles = () => StyleSheet.create({
   container: {
     flex: 1,
     justifyContent: 'center',

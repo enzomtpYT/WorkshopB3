@@ -7,7 +7,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { authenticationStyles } from '../style/AuthenticationStyles';
+import { createAuthenticationStyles } from '../../style';
 import AuthenticationService from '../services/AuthenticationService';
 
 interface AuthenticationScreenProps {
@@ -19,6 +19,8 @@ export const AuthenticationScreen: React.FC<AuthenticationScreenProps> = ({ onAu
   const [encryptionKey, setEncryptionKey] = useState('');
   const [isRegistering, setIsRegistering] = useState(false);
   const [error, setError] = useState('');
+
+  const authenticationStyles = createAuthenticationStyles();
 
   useEffect(() => {
     checkDeviceRegistration();
