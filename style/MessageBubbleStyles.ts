@@ -9,8 +9,18 @@ export const createMessageBubbleStyles = (msg: any, theme: any) =>
     },
     card: {
       maxWidth: '80%',
+      minWidth: 80,
       backgroundColor: msg.isSent ? theme.primary : theme.card,
       alignSelf: msg.isSent ? 'flex-end' : 'flex-start',
+      elevation: msg.isEncrypted ? 4 : 1,
+      opacity: msg.decryptionFailed ? 0.7 : 1,
+      borderRadius: 12,
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+    },
+    encryptedCard: {
+      borderWidth: 1,
+      borderColor: theme.primary,
     },
     content: { 
       paddingBottom: 6, 

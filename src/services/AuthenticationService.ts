@@ -1,26 +1,12 @@
 import { NativeModules, Platform } from 'react-native';
 import { CryptoService } from '../crypto/CryptoService';
-import SQLiteService from '../database/SQLiteService';
+import { sqliteService } from '../database/SQLiteService';
 
 class AuthenticationService {
   private cryptoService: CryptoService;
-  private dbService: SQLiteService;
   
   constructor() {
     this.cryptoService = new CryptoService();
-    this.dbService = new SQLiteService();
-    this.initializeDatabase().catch(console.error);
-  }
-
-  private async initializeDatabase() {
-    await this.dbService.init();
-    await this.dbService.executeQuery(
-      `CREATE TABLE IF NOT EXISTS users (
-        mac_address TEXT PRIMARY KEY,
-        username TEXT NOT NULL,
-        encryption_key TEXT NOT NULL
-      )`
-    );
   }
 
   async getMacAddress(): Promise<string> {
@@ -43,6 +29,8 @@ class AuthenticationService {
     } catch (error) {
       console.error('Erreur lors de la récupération de l\'adresse MAC:', error);
       return 'DEFAULT_MAC_ADDRESS';
+    } finally {
+      // Nettoyage si nécessaire
     }
   }
 
@@ -56,7 +44,7 @@ class AuthenticationService {
       console.log('Clé hashée générée');
       
       console.log('Tentative d\'insertion dans la base de données...');
-      await this.dbService.executeQuery(
+      await sqliteService.executeQuery(
         'INSERT OR REPLACE INTO users (mac_address, username, encryption_key) VALUES (?, ?, ?)',
         [macAddress, username, hashedKey]
       );
@@ -78,7 +66,7 @@ class AuthenticationService {
       const macAddress = await this.getMacAddress();
       const hashedKey = await this.cryptoService.hash(encryptionKey);
       
-      const result = await this.dbService.executeQuery(
+      const result = await sqliteService.executeQuery(
         'SELECT * FROM users WHERE mac_address = ? AND username = ? AND encryption_key = ?',
         [macAddress, username, hashedKey]
       );
@@ -93,7 +81,7 @@ class AuthenticationService {
   async isDeviceRegistered(): Promise<boolean> {
     try {
       const macAddress = await this.getMacAddress();
-      const result = await this.dbService.executeQuery(
+      const result = await sqliteService.executeQuery(
         'SELECT * FROM users WHERE mac_address = ?',
         [macAddress]
       );
