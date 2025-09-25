@@ -42,6 +42,11 @@ import type { MaterialYouPalette } from 'react-native-material-you-colors';
 import { broadcastListener } from './BroadcastListener';
 import MessageBubble from './MessageBubble';
 import { computeShowTimestampFlags } from './ShowTimestamp';
+import {
+  bluetoothMessaging,
+  BluetoothMessage,
+  DiscoveredDevice
+} from './BluetoothMessaging';
 import { sqliteService, Message } from './src/database/SQLiteService';
 import { cryptoService } from './src/crypto/CryptoService';
 
@@ -581,7 +586,7 @@ const AppContent: React.FC<{
     };
   }, []);
 
-  const styles = createAppContentStyles(theme, insets, keyboardVisible);
+  const styles = createAppContentStyles(theme, insets);
 
   // ------- Auto-scroll + suivi clavier -------
   const scrollViewRef = useRef<ScrollView | null>(null);
@@ -776,27 +781,258 @@ const AppContent: React.FC<{
 const BluetoothContent: React.FC<{ username: string }> = ({ username }) => {
   const theme = useMaterialYouTheme();
   const insets = useSafeAreaInsets();
+  const [bluetoothMessages, setBluetoothMessages] = useState<BluetoothMessage[]>([]);
+  const [discoveredDevices, setDiscoveredDevices] = useState<DiscoveredDevice[]>([]);
+  const [isBluetoothActive, setIsBluetoothActive] = useState(false);
+  const [bluetoothInputText, setBluetoothInputText] = useState('');
+  const [keyboardVisible, setKeyboardVisible] = React.useState(false);
+  const bluetoothScrollViewRef = useRef<ScrollView | null>(null);
+  const [autoScroll, setAutoScroll] = useState(true);
 
   const styles = createBluetoothContentStyles(theme, insets);
 
+  // Bluetooth message flags for timestamps
+  const bluetoothShowFlags = useMemo(
+    () => computeShowTimestampFlags(bluetoothMessages.map(msg => ({
+      message: msg.message,
+      timestamp: msg.timestamp,
+      sender: msg.sender,
+      isSent: msg.sender === 'You'
+    }))),
+    [bluetoothMessages],
+  );
+
+  useEffect(() => {
+    const show = Keyboard.addListener('keyboardDidShow', () =>
+      setKeyboardVisible(true),
+    );
+    const hide = Keyboard.addListener('keyboardDidHide', () =>
+      setKeyboardVisible(false),
+    );
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    // Set up Bluetooth message handler
+    bluetoothMessaging.setMessageHandler((message: BluetoothMessage) => {
+      setBluetoothMessages(prev => [...prev, message]);
+    });
+
+    // Set up device discovery handler
+    bluetoothMessaging.setDeviceDiscoveryHandler((device: DiscoveredDevice) => {
+      setDiscoveredDevices(prev => {
+        const existing = prev.find(d => d.deviceId === device.deviceId);
+        if (existing) {
+          return prev.map(d => d.deviceId === device.deviceId ? device : d);
+        }
+        return [...prev, device];
+      });
+    });
+
+    return () => {
+      bluetoothMessaging.cleanup();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (autoScroll) {
+      requestAnimationFrame(() => {
+        bluetoothScrollViewRef.current?.scrollToEnd({ animated: true });
+      });
+    }
+  }, [bluetoothMessages, autoScroll]);
+
+  const handleBluetoothContentSizeChange = useCallback(() => {
+    if (autoScroll) {
+      bluetoothScrollViewRef.current?.scrollToEnd({ animated: true });
+    }
+  }, [autoScroll]);
+
+  const handleBluetoothScroll = useCallback(
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const { layoutMeasurement, contentOffset, contentSize } = e.nativeEvent;
+      const paddingToBottom = 24;
+      const isBottom =
+        layoutMeasurement.height + contentOffset.y >=
+        contentSize.height - paddingToBottom;
+      setAutoScroll(isBottom);
+    },
+    [],
+  );
+
+  const toggleBluetoothService = async () => {
+    if (!username.trim()) {
+      Alert.alert('Error', 'Please set a username first in settings');
+      return;
+    }
+
+    try {
+      if (isBluetoothActive) {
+        await bluetoothMessaging.stopService();
+        setIsBluetoothActive(false);
+        setDiscoveredDevices([]);
+      } else {
+        await bluetoothMessaging.startService(username.trim());
+        setIsBluetoothActive(true);
+      }
+    } catch (error) {
+      console.error('Failed to toggle Bluetooth service:', error);
+      Alert.alert('Error', 'Failed to start/stop Bluetooth service');
+    }
+  };
+
+  const sendBluetoothMessage = async () => {
+    if (!bluetoothInputText.trim()) return;
+    if (!isBluetoothActive) {
+      Alert.alert('Error', 'Please start Bluetooth service first');
+      return;
+    }
+
+    try {
+      // Add message to local list immediately
+      const sentMessage: BluetoothMessage = {
+        id: `sent_${Date.now()}`,
+        message: bluetoothInputText.trim(),
+        sender: 'You',
+        timestamp: Date.now()
+      };
+
+      setBluetoothMessages(prev => [...prev, sentMessage]);
+
+      // Send via Bluetooth
+      await bluetoothMessaging.sendMessage(bluetoothInputText.trim());
+      setBluetoothInputText('');
+    } catch (error) {
+      console.error('Failed to send Bluetooth message:', error);
+      Alert.alert('Error', 'Failed to send Bluetooth message');
+    }
+  };
+
+  const clearBluetoothMessages = () => {
+    setBluetoothMessages([]);
+  };
+
+  const onlineDevicesCount = discoveredDevices.filter(device => device.isOnline).length;
+
   return (
-    <View style={styles.container}>
-      <View style={styles.content}>
-        <PaperText style={styles.title}>Bluetooth Chat</PaperText>
-        <PaperText style={styles.placeholderText}>
-          Bluetooth functionality is currently under development.
-        </PaperText>
-        <PaperText style={styles.placeholderText}>
-          This feature will allow you to discover and connect to nearby devices
-          running the Workshop app and exchange messages over Bluetooth.
-        </PaperText>
-        {username && (
-          <PaperText style={styles.usernameText}>
-            Signed in as: {username}
-          </PaperText>
-        )}
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={
+        keyboardVisible
+          ? Platform.OS === 'ios'
+            ? 'padding'
+            : 'height'
+          : undefined
+      }
+      keyboardVerticalOffset={0}
+    >
+      <View style={styles.messagesContainer}>
+        <View style={styles.statusContainer}>
+          <View style={styles.statusInfo}>
+            <PaperText style={styles.statusText}>
+              Bluetooth Status: {isBluetoothActive ? 'Active' : 'Inactive'}
+            </PaperText>
+            <PaperText style={styles.ipText}>
+              Devices nearby: {onlineDevicesCount}
+            </PaperText>
+            {username && (
+              <PaperText style={styles.ipText}>
+                Broadcasting as: {username}
+              </PaperText>
+            )}
+          </View>
+
+          <View style={styles.buttonContainer}>
+            <Button
+              mode={isBluetoothActive ? 'contained' : 'outlined'}
+              onPress={toggleBluetoothService}
+              style={styles.clearButton}
+              labelStyle={styles.clearButtonLabel}
+              buttonColor={isBluetoothActive ? theme.primary : undefined}
+            >
+              {isBluetoothActive ? 'Stop' : 'Start'}
+            </Button>
+            <Button
+              mode="outlined"
+              onPress={clearBluetoothMessages}
+              disabled={bluetoothMessages.length === 0}
+              style={styles.clearButton}
+              labelStyle={styles.clearButtonLabel}
+            >
+              Clear
+            </Button>
+          </View>
+        </View>
+
+        <ScrollView
+          ref={bluetoothScrollViewRef}
+          onContentSizeChange={handleBluetoothContentSizeChange}
+          onScroll={handleBluetoothScroll}
+          scrollEventThrottle={16}
+          keyboardShouldPersistTaps="handled"
+        >
+          {bluetoothMessages.length === 0 ? (
+            <View style={styles.content}>
+              <PaperText style={styles.title}>Bluetooth Chat</PaperText>
+              <PaperText style={styles.placeholderText}>
+                Start the Bluetooth service to begin discovering nearby Workshop app users and exchange messages.
+              </PaperText>
+              <PaperText style={styles.placeholderText}>
+                Messages are sent using BLE advertising without requiring device pairing.
+              </PaperText>
+            </View>
+          ) : (
+            bluetoothMessages.map((msg, index) => (
+              <MessageBubble
+                key={msg.id || index}
+                msg={{
+                  _id: msg.id || index.toString(),
+                  message: msg.message,
+                  timestamp: msg.timestamp,
+                  sender: msg.sender,
+                  isSent: msg.sender === 'You'
+                }}
+                showTime={bluetoothShowFlags[index]}
+                theme={theme}
+              />
+            ))
+          )}
+        </ScrollView>
       </View>
-    </View>
+
+      <View style={styles.inputContainer}>
+        <TextInput
+          mode="outlined"
+          label="Bluetooth Message"
+          value={bluetoothInputText}
+          onChangeText={setBluetoothInputText}
+          style={styles.input}
+          textColor={theme.text}
+          outlineColor={theme.primary}
+          activeOutlineColor={theme.primary}
+          placeholder="Enter message to broadcast..."
+          disabled={!isBluetoothActive}
+          onFocus={() => {
+            if (autoScroll) {
+              requestAnimationFrame(() =>
+                bluetoothScrollViewRef.current?.scrollToEnd({ animated: true }),
+              );
+            }
+          }}
+        />
+        <IconButton
+          icon="bluetooth"
+          onPress={sendBluetoothMessage}
+          iconColor={theme.textColored}
+          containerColor={theme.primary}
+          disabled={!bluetoothInputText.trim() || !isBluetoothActive}
+          size={24}
+        />
+      </View>
+    </KeyboardAvoidingView>
   );
 };
 

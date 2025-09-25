@@ -5,8 +5,48 @@ export const createBluetoothContentStyles = (theme: any, insets: any) =>
     container: {
       flex: 1,
       paddingTop: insets.top,
-      paddingBottom: insets.bottom,
+      paddingBottom: 0,
       backgroundColor: theme.background,
+    },
+    messagesContainer: {
+      flex: 1,
+      paddingHorizontal: 16,
+      paddingTop: 8,
+    },
+    statusContainer: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+      paddingVertical: 12,
+      paddingHorizontal: 8,
+      backgroundColor: theme.card,
+      borderRadius: 8,
+      marginBottom: 8,
+    },
+    statusInfo: {
+      flex: 1,
+    },
+    statusText: {
+      fontSize: 14,
+      color: theme.text,
+      fontWeight: '600',
+    },
+    ipText: {
+      fontSize: 12,
+      color: theme.text,
+      opacity: 0.7,
+      marginTop: 4,
+    },
+    buttonContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    clearButton: {
+      minWidth: 60,
+    },
+    clearButtonLabel: {
+      fontSize: 12,
     },
     content: {
       flex: 1,
@@ -32,6 +72,18 @@ export const createBluetoothContentStyles = (theme: any, insets: any) =>
       color: theme.primary,
       fontWeight: 'bold',
       marginTop: 20,
+    },
+    inputContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      marginBottom: 10,
+      paddingHorizontal: 20,
+      paddingBottom: 10,
+    },
+    input: {
+      flex: 1,
+      backgroundColor: theme.card,
     },
     activeIcon: {
       opacity: 1,
