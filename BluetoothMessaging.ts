@@ -30,6 +30,8 @@ class BluetoothMessagingService {
   private onMessageReceived: (message: BluetoothMessage) => void = () => {};
   private onDeviceDiscovered: (device: DiscoveredDevice) => void = () => {};
   private recentMessages: BluetoothMessage[] = [];
+  private discoveredDevices: DiscoveredDevice[] = [];
+  private connectedDevices: DiscoveredDevice[] = [];
 
   constructor() {
     console.log('Starting bluetooth service.');
@@ -89,6 +91,14 @@ class BluetoothMessagingService {
     // Handle discovered devices
     BleManager.onDiscoverPeripheral((device: any) => {
       console.log(`Discovered Bluetooth device: ${device.name || 'Unnamed'} (${device.id}) RSSI: ${device.rssi}, Service UUIDs: ${device.advertising.serviceUUIDs}`);
+      const discoveredDevice: DiscoveredDevice = {
+        deviceId: device.id,
+        name: device.name || 'Unnamed',
+        rssi: device.rssi,
+        lastSeen: Date.now(),
+        isOnline: true,
+      };
+      this.onDeviceDiscovered(discoveredDevice);
     });
     this.isServiceActive = true;
     console.log(`Bluetooth service started for user: ${username}`);
@@ -132,23 +142,16 @@ class BluetoothMessagingService {
   }
 
   getDiscoveredDevices(): DiscoveredDevice[] {
-    // Return empty array since we're not actually discovering devices
-    return [];
-  }
-
-  getConnectedDevices(): string[] {
-    // Return empty array since we're not actually connecting to devices
-    return [];
+    return [...this.discoveredDevices];
   }
 
   getWorkshopDevices(): Array<{deviceId: string, username?: string, appVersion?: string, connectedAt: number}> {
-    // Return empty array since we're not actually connecting to Workshop devices
     return [];
   }
 
   getConnectionStatus(): { discovered: number; connected: number; workshopDevices: number; recentMessages: number } {
     return {
-      discovered: 0,
+      discovered: this.discoveredDevices.length,
       connected: 0,
       workshopDevices: 0,
       recentMessages: this.recentMessages.length
@@ -174,11 +177,6 @@ class BluetoothMessagingService {
   cleanup() {
     this.isServiceActive = false;
     this.recentMessages = [];
-  }
-
-  // Placeholder for manual discovery
-  async discoverWorkshopDevices(): Promise<void> {
-    console.log('🔍 Workshop device discovery called');
   }
 }
 
