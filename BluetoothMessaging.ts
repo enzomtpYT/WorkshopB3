@@ -1,3 +1,11 @@
+import { PermissionsAndroid, Platform } from 'react-native';
+import BleManager from 'react-native-ble-manager';
+import { toastService } from './src/services/ToastService';
+import {
+  startAdvertising,
+  stopAdvertising,
+} from 'munim-bluetooth-peripheral';
+
 export interface BluetoothMessage {
   id: string;
   message: string;
@@ -6,9 +14,11 @@ export interface BluetoothMessage {
   deviceId?: string;
 }
 
+const serviceUUID = '44C13E43-097A-9C9F-537F-5666A6840C08';
+
 export interface DiscoveredDevice {
   deviceId: string;
-  name?: string;
+  name: string;
   rssi: number;
   lastSeen: number;
   isOnline: boolean;
@@ -23,16 +33,75 @@ class BluetoothMessagingService {
 
   constructor() {
     console.log('Starting bluetooth service.');
+    BleManager.start({ showAlert: false });
+  }
+
+  async requestBluetoothPermission() {
+    if (Platform.OS === 'ios') {
+      return true
+    }
+    if (Platform.OS === 'android' && PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION) {
+      const apiLevel = parseInt(Platform.Version.toString(), 10)
+    
+      if (apiLevel < 31) {
+        const granted = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION)
+        return granted === PermissionsAndroid.RESULTS.GRANTED
+      }
+      if (PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN && PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT && PermissionsAndroid.PERMISSIONS.BLUETOOTH_ADVERTISE) {
+        const result = await PermissionsAndroid.requestMultiple([
+          PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
+          PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
+          PermissionsAndroid.PERMISSIONS.BLUETOOTH_ADVERTISE,
+          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION
+        ])
+      
+        return (
+          result['android.permission.BLUETOOTH_CONNECT'] === PermissionsAndroid.RESULTS.GRANTED &&
+          result['android.permission.BLUETOOTH_SCAN'] === PermissionsAndroid.RESULTS.GRANTED &&
+          result['android.permission.BLUETOOTH_ADVERTISE'] === PermissionsAndroid.RESULTS.GRANTED &&
+          result['android.permission.ACCESS_FINE_LOCATION'] === PermissionsAndroid.RESULTS.GRANTED
+        )
+      }
+    }
+  
+    
+    toastService.showError('Bluetooth permissions are required.');
+    return false
   }
 
   async startService(username: string) {
     this.username = username;
+    // Request necessary permissions
+    if (!await this.requestBluetoothPermission()) {
+      return false;
+    }
+    // Start advertising
+    startAdvertising({
+      serviceUUIDs: [serviceUUID],
+    });
+    // Start scanning for devices
+    BleManager.scan([serviceUUID], 10, false).then(() => {
+      console.log('Scan started');
+    }).catch(err => {
+      toastService.showError('Failed to start Bluetooth scan: ' + err);
+      return false;
+    });
+    // Handle discovered devices
+    BleManager.onDiscoverPeripheral((device: any) => {
+      console.log(`Discovered Bluetooth device: ${device.name || 'Unnamed'} (${device.id}) RSSI: ${device.rssi}, Service UUIDs: ${device.advertising.serviceUUIDs}`);
+    });
     this.isServiceActive = true;
-
     console.log(`Bluetooth service started for user: ${username}`);
+    return true;
   }
 
   async stopService() {
+    // Stop advertising
+    stopAdvertising();
+    // Stop scanning
+    BleManager.stopScan().then(() => {
+      console.log("Scan stopped");
+    });
     this.isServiceActive = false;
     console.log('Bluetooth service stopped');
   }

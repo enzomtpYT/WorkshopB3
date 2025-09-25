@@ -49,6 +49,8 @@ import {
 } from './BluetoothMessaging';
 import { sqliteService, Message } from './src/database/SQLiteService';
 import { cryptoService } from './src/crypto/CryptoService';
+import CustomToast from './src/components/CustomToast';
+import { toastService } from './src/services/ToastService';
 
 // Helper : extrait {sender, body} à partir du message brut
 function extractSenderAndBody(raw: string): { sender?: string; body: string } {
@@ -167,7 +169,7 @@ class App extends Component<{}, AppState> {
       console.log('Database initialized successfully');
     } catch (error) {
       console.error('Failed to initialize database:', error);
-      Alert.alert('Error', 'Failed to initialize database');
+      toastService.showError('Failed to initialize database');
     }
     try {
       await sqliteService.init();
@@ -250,10 +252,7 @@ class App extends Component<{}, AppState> {
   sendMsg = async () => {
     if (!this.state.isDatabaseInitialized) {
       console.error('Failed to broadcast message: Database not initialized');
-      Alert.alert(
-        'Error',
-        'Database not initialized yet. Please try again in a moment.',
-      );
+      toastService.showError('Database not initialized yet. Please try again in a moment.');
       return;
     }
 
@@ -317,7 +316,7 @@ class App extends Component<{}, AppState> {
         );
       } catch (error) {
         console.error('Failed to broadcast message:', error);
-        Alert.alert('Error', 'Failed to send broadcast message');
+        toastService.showError('Failed to send broadcast message');
       }
     }
     this.setState({ inputText: '' });
@@ -522,6 +521,7 @@ class App extends Component<{}, AppState> {
               onClose={this.closeEncryptionSettings}
               onSave={this.saveUserPassword}
             />
+            <CustomToast />
           </ThemeProvider>
         </PaperProvider>
       </SafeAreaProvider>
@@ -865,7 +865,7 @@ const BluetoothContent: React.FC<{ username: string }> = ({ username }) => {
 
   const toggleBluetoothService = async () => {
     if (!username.trim()) {
-      Alert.alert('Error', 'Please set a username first in settings');
+      toastService.showError('Please set a username first in settings');
       return;
     }
 
@@ -875,12 +875,14 @@ const BluetoothContent: React.FC<{ username: string }> = ({ username }) => {
         setIsBluetoothActive(false);
         setDiscoveredDevices([]);
       } else {
-        await bluetoothMessaging.startService(username.trim());
+        if(!await bluetoothMessaging.startService(username.trim())) {
+          return;
+        }
         setIsBluetoothActive(true);
       }
     } catch (error) {
       console.error('Failed to toggle Bluetooth service:', error);
-      Alert.alert('Error', 'Failed to start/stop Bluetooth service');
+      toastService.showError('Failed to start/stop Bluetooth service');
     }
   };
 
