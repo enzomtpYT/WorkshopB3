@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { createAuthenticationStyles } from '../../style';
 import AuthenticationService from '../services/AuthenticationService';
+import { useMaterialYouTheme } from '../../App';
 
 interface AuthenticationScreenProps {
   onAuthenticationSuccess: () => void;
@@ -20,7 +21,8 @@ export const AuthenticationScreen: React.FC<AuthenticationScreenProps> = ({ onAu
   const [isRegistering, setIsRegistering] = useState(false);
   const [error, setError] = useState('');
 
-  const authenticationStyles = createAuthenticationStyles();
+  const theme = useMaterialYouTheme();
+  const authenticationStyles = createAuthenticationStyles(theme);
 
   useEffect(() => {
     checkDeviceRegistration();
