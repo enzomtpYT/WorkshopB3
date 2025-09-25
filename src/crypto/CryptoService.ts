@@ -1,5 +1,5 @@
 import 'react-native-get-random-values';
-import CryptoJS from 'react-native-crypto-js';
+import CryptoJS from 'crypto-js';
 
 export interface EncryptedMessage {
   encrypted: string;
@@ -14,7 +14,14 @@ export interface DecryptionResult {
   error?: string;
 }
 
-class CryptoService {
+export class CryptoService {
+  /**
+   * Hash une chaîne de caractères avec SHA-256 en utilisant un algorithme natif
+   */
+  async hash(text: string): Promise<string> {
+    return CryptoJS.SHA256(text).toString();
+  }
+
   /**
    * Génère une clé AES-256 à partir d'un mot de passe
    */
