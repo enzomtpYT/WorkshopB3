@@ -100,13 +100,21 @@ const MessageBubble: React.FC<{
   return (
     <View style={styles.wrap}>
       <TouchableOpacity 
-        style={[styles.card, msg.isEncrypted && styles.encryptedCard]} 
+        style={[styles.card, msg.isEncrypted && !msg.isSent && styles.encryptedCard]} 
         onPress={() => {
-          if (msg.isEncrypted && onEncryptedMessagePress) {
+          console.log('MessageBubble click:', {
+            isEncrypted: msg.isEncrypted,
+            isSent: msg.isSent,
+            sender: msg.sender,
+            message: msg.message,
+            decryptionFailed: msg.decryptionFailed
+          });
+          if (msg.isEncrypted && !msg.isSent && onEncryptedMessagePress) {
+            console.log('Calling onEncryptedMessagePress');
             onEncryptedMessagePress(msg);
           }
         }}
-        activeOpacity={msg.isEncrypted ? 0.7 : 1}
+        activeOpacity={msg.isEncrypted && !msg.isSent ? 0.7 : 1}
       >
         <View style={contentStyle}>
           {!msg.isSent && (

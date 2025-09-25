@@ -293,26 +293,30 @@ class App extends Component<{}, AppState> {
     if (this.state.inputText.trim()) {
       try {
         let messageToSend = this.state.inputText.trim();
-        let messageToStore = messageToSend;
         let isEncrypted = false;
         let encryptionTarget: string | undefined;
 
         // Si le mode chiffrement est activé
         if (this.state.encryptionMode && this.state.recipientPassword) {
           try {
+            console.log('Encrypting message:', this.state.inputText.trim(), 'with password length:', this.state.recipientPassword.length);
+            
             const encryptedData = cryptoService.encryptMessage(
               messageToSend,
               this.state.recipientPassword,
               'recipient', // Ou le username du destinataire si vous l'avez
             );
 
+            console.log('Encrypted data:', encryptedData);
+
             // Message à envoyer (JSON chiffré)
             messageToSend = JSON.stringify(encryptedData);
-            // Message à stocker (texte original + indicateur)
-            messageToStore = `🔒 [Encrypted] ${this.state.inputText.trim()}`;
+            console.log('Message to send (JSON):', messageToSend);
+            
             isEncrypted = true;
             encryptionTarget = 'recipient';
           } catch (error) {
+            console.error('Encryption error:', error);
             Alert.alert('Encryption Error', 'Failed to encrypt message');
             return;
           }
@@ -332,8 +336,9 @@ class App extends Component<{}, AppState> {
         // Créer le message pour l'état
         const sentMessage: Message = {
           _id: messageId,
-          message: messageToSend, // Message chiffré
+          message: isEncrypted ? `🔒 ${this.state.inputText.trim()}` : messageToSend, // Texte original avec icône si chiffré
           originalMessage: isEncrypted ? this.state.inputText.trim() : undefined,
+          originalEncrypted: isEncrypted ? messageToSend : undefined, // Message chiffré pour référence
           timestamp: Date.now(),
           sender: 'You',
           isSent: true,
@@ -364,47 +369,45 @@ class App extends Component<{}, AppState> {
       await broadcastListener.startListening(
         async (message: string, senderInfo: any) => {
           try {
-            // 1) Première extraction côté "clair" (avant déchiffrement)
-            const firstParse = extractSenderAndBody(message);
-            let parsedSender = firstParse.sender; // username s’il est déjà dans l’enveloppe
-            let finalMessage = firstParse.body;
+            // Variables pour le traitement du message
+            let parsedSender: string | undefined; // username s’il est déjà dans l’enveloppe
+            let finalMessage: string;
 
             let isEncrypted = false;
             let decryptionFailed = false;
 
-            // 2) Gestion chiffrage
-            if (
-              cryptoService.isEncryptedMessage(finalMessage) &&
-              this.state.userPassword
-            ) {
-              const encryptedData =
-                cryptoService.parseEncryptedMessage(finalMessage);
+            // 2) D'abord vérifier si le message brut est chiffré
+            if (cryptoService.isEncryptedMessage(message)) {
+              isEncrypted = true;
+              
+              if (this.state.userPassword) {
+                const encryptedData =
+                cryptoService.parseEncryptedMessage(message);
               if (encryptedData) {
-                isEncrypted = true;
                 const decryptionResult = cryptoService.decryptMessage(
                   encryptedData,
                   this.state.userPassword,
                 );
 
                 if (decryptionResult.success) {
-                  finalMessage = decryptionResult.message!;
+                  // Pour les messages reçus, on garde l'indicateur chiffré même si on peut déchiffrer
+                  finalMessage = '🔒 [Message chiffré - touchez pour déchiffrer]';
 
                   // 2.bis) Si on n’avait pas de username AVANT, on re-tente l’extraction APRÈS déchiffrement
-                  if (!parsedSender) {
-                    const afterDecrypt = extractSenderAndBody(finalMessage);
-                    parsedSender = afterDecrypt.sender || parsedSender;
-                    finalMessage = afterDecrypt.body; // on nettoie le corps si format "Alice: ..."/JSON
-                  }
                 } else {
-                  finalMessage = '🔒 [Encrypted message - wrong password]';
-                  decryptionFailed = true;
+                  finalMessage = '🔒 [Message chiffré - touchez pour déchiffrer]';
                 }
+              } else {
+                finalMessage = '🔒 [Message chiffré - touchez pour déchiffrer]';
               }
-            } else if (cryptoService.isEncryptedMessage(finalMessage)) {
-              // Message chiffré mais pas de mot de passe défini
-              finalMessage = '🔒 [Encrypted message - no password set]';
-              isEncrypted = true;
-              decryptionFailed = true;
+              } else {
+                finalMessage = '🔒 [Message chiffré - touchez pour déchiffrer]';
+              }
+            } else {
+              // Message non chiffré - parsing normal
+              const firstParse = extractSenderAndBody(message);
+              parsedSender = firstParse.sender;
+              finalMessage = firstParse.body;
             }
 
             // 3) Détermination du "sender" à afficher (username prioritaire)
@@ -488,14 +491,23 @@ class App extends Component<{}, AppState> {
     this.setState({ inputText: text });
   };
 
-  handleEncryptedMessage = (message: Message): void => {
-    if (message.isEncrypted) {
-      // Utiliser le message chiffré original s'il existe, sinon utiliser le message actuel
-      const encryptedMessage = message.originalEncrypted || message.message;
+  handleEncryptedMessage = (_message: Message): void => {
+    console.log('handleEncryptedMessage called with:', {
+      isEncrypted: _message.isEncrypted,
+      hasOriginalEncrypted: !!_message.originalEncrypted,
+      originalEncrypted: _message.originalEncrypted,
+      messageContent: _message.message
+    });
+    
+    if (_message.isEncrypted && _message.originalEncrypted) {
+      // Utiliser TOUJOURS le message chiffré original pour les messages reçus
+      console.log('Opening decryption modal with message:', _message.originalEncrypted);
       this.setState({
         showDecryptionModal: true,
-        pendingEncryptedMessage: encryptedMessage
+        pendingEncryptedMessage: _message.originalEncrypted
       });
+    } else {
+      console.log('Cannot decrypt: missing originalEncrypted or not encrypted');
     }
   };
 
@@ -1069,7 +1081,7 @@ const BluetoothContent: React.FC<{ username: string }> = ({ username }) => {
                 }}
                 showTime={bluetoothShowFlags[index]}
                 theme={theme}
-                onEncryptedMessagePress={message => {/* Ne rien faire pour les messages Bluetooth */}}
+                onEncryptedMessagePress={_message => {/* Ne rien faire pour les messages Bluetooth */}}
               />
             ))
           )}

@@ -29,24 +29,36 @@ export const DecryptionModal: React.FC<DecryptionModalProps> = ({
   const [error, setError] = useState('');
 
   const handleDecryption = () => {
+    console.log('DecryptionModal: Attempting decryption with:', {
+      encryptedMessage: encryptedMessage,
+      passwordLength: password.length
+    });
+    
     try {
       const encryptedData = cryptoService.parseEncryptedMessage(encryptedMessage);
+      console.log('DecryptionModal: Parsed encrypted data:', encryptedData);
+      
       if (!encryptedData) {
+        console.log('DecryptionModal: Failed to parse encrypted message');
         setError('Format de message invalide');
         return;
       }
 
       const result = cryptoService.decryptMessage(encryptedData, password);
+      console.log('DecryptionModal: Decryption result:', result);
       
       if (result.success && result.message) {
+        console.log('DecryptionModal: Decryption successful:', result.message);
         onDecrypted(result.message);
         setPassword('');
         setError('');
         onClose();
       } else {
+        console.log('DecryptionModal: Decryption failed:', result.error);
         setError(result.error || 'Échec du déchiffrement');
       }
     } catch (e) {
+      console.log('DecryptionModal: Exception during decryption:', e);
       setError('Erreur lors du déchiffrement');
       console.error('Decrypt error:', e);
     }

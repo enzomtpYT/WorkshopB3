@@ -163,14 +163,18 @@ class SQLiteService {
       const messages: Message[] = [];
       for (let i = 0; i < results.rows.length; i++) {
         const row = results.rows.item(i);
+        const isEncrypted = row.isEncrypted === 1;
+        const isSent = row.isSent === 1;
+        
         messages.push({
           _id: row.id,
-          message: row.message,
+          // Pour les messages envoyés chiffrés, afficher le message original décrypté avec icône
+          message: isEncrypted && isSent && row.originalMessage ? `🔒 ${row.originalMessage}` : row.message,
           timestamp: row.timestamp,
           sender: row.sender,
-          isSent: row.isSent === 1,
+          isSent: isSent,
           senderIp: row.senderIp,
-          isEncrypted: row.isEncrypted === 1,
+          isEncrypted: isEncrypted,
           encryptionTarget: row.encryptionTarget,
           decryptionFailed: row.decryptionFailed === 1,
           originalEncrypted: row.originalEncrypted,

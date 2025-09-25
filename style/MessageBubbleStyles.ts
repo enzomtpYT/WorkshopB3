@@ -87,5 +87,19 @@ export const createMessageBubbleStyles = (msg: any, theme: any) =>
       fontWeight: 'bold',
       marginBottom: 4,
     },
+    
+    // Styles pour l'icône de cadenas des messages envoyés chiffrés
+    encryptedMessageContainer: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+    },
+    lockIcon: {
+      color: msg.isSent ? theme.textColored : theme.text,
+      fontSize: 14,
+      marginRight: 4,
+    },
+    messageTextWithIcon: {
+      flex: 1,
+    },
 
   });
