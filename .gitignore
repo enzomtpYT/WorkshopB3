@@ -76,3 +76,7 @@ yarn-error.log
 
 scss
 .claude/
+
+App.new.tsx
+App.old.tsx
+Appauth.tsx

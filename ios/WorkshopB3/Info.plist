@@ -33,6 +33,8 @@
 	</dict>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Cette application a besoin d'accéder à votre localisation pour détecter l'adresse IP réseau.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Cette application a besoin d'accéder au réseau local pour l'authentification.</string>
 	<key>RCTNewArchEnabled</key>
 	<false/>
 	<key>UILaunchStoryboardName</key>

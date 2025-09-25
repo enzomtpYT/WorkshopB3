@@ -12,8 +12,43 @@ export interface Message {
   decryptionFailed?: boolean;   // NOUVEAU: Indique si le déchiffrement a échoué
 }
 
-class SQLiteService {
+export interface SQLiteResult {
+  rows: {
+    length: number;
+    item: (index: number) => any;
+    raw: () => any[];
+  };
+  insertId?: number;
+  rowsAffected: number;
+}
+
+export default class SQLiteService {
   private db: SQLiteDatabase | null = null;
+
+  async executeQuery(query: string, params: any[] = []): Promise<SQLiteResult> {
+    if (!this.db) {
+      await this.init();
+    }
+
+    if (!this.db) {
+      throw new Error('Database not initialized');
+    }
+
+    return new Promise((resolve, reject) => {
+      this.db!.transaction((tx) => {
+        tx.executeSql(
+          query,
+          params,
+          (_, result) => resolve(result),
+          (_, error) => {
+            console.error('SQL Error:', error);
+            reject(error);
+            return false;
+          }
+        );
+      });
+    });
+  }
 
   async init(): Promise<void> {
     return new Promise((resolve, reject) => {
