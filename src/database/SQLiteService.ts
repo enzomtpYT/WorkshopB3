@@ -29,10 +29,16 @@ export interface Message {
 
 class SQLiteService {
   private db: SQLiteDatabase | null = null;
+  private isInitializing: boolean = false;
 
   async executeQuery(query: string, params: any[] = []): Promise<SQLiteResult> {
-    if (!this.db) {
+    if (!this.db && !this.isInitializing) {
       await this.init();
+    }
+
+    // Attendre que l'initialisation soit terminée si elle est en cours
+    while (this.isInitializing) {
+      await new Promise<void>(resolve => setTimeout(() => resolve(), 10));
     }
 
     try {
@@ -45,6 +51,19 @@ class SQLiteService {
   }
 
   async init(): Promise<void> {
+    if (this.db) {
+      return; // Déjà initialisée
+    }
+    
+    if (this.isInitializing) {
+      // Si une initialisation est déjà en cours, attendre qu'elle se termine
+      while (this.isInitializing) {
+        await new Promise<void>(resolve => setTimeout(() => resolve(), 10));
+      }
+      return;
+    }
+
+    this.isInitializing = true;
     try {
       this.db = await SQLite.openDatabase({
         name: 'broadcast.db',
@@ -99,7 +118,7 @@ class SQLiteService {
           originalMessage TEXT
         )`
       );
-      await sqliteService.executeQuery(
+      await this.db.executeSql(
       `CREATE TABLE IF NOT EXISTS users (
         mac_address TEXT PRIMARY KEY,
         username TEXT NOT NULL,
@@ -111,6 +130,8 @@ class SQLiteService {
     } catch (error) {
       console.error('Database initialization error:', error);
       throw error;
+    } finally {
+      this.isInitializing = false;
     }
   }
 

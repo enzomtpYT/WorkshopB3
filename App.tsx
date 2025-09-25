@@ -209,7 +209,7 @@ class App extends Component<{}, AppState> {
     this.startBroadcastListener();
     this.loadUsername();
     this.loadUserPassword(); // NOUVEAU
-    this.loadMessages();
+    await this.loadMessages(); // Attendre le chargement des messages
   }
 
   async componentWillUnmount() {
@@ -236,7 +236,10 @@ class App extends Component<{}, AppState> {
 
   loadMessages = async () => {
     try {
-      if (!this.state.isDatabaseInitialized) return;
+      // Attendre que la base soit initialisée si elle ne l'est pas encore
+      if (!this.state.isDatabaseInitialized) {
+        await sqliteService.init();
+      }
       const messages = await sqliteService.getAllMessages();
       this.setState({ receivedMessages: messages });
     } catch (error) {
