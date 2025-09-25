@@ -600,7 +600,7 @@ const AppContent: React.FC<{
     };
   }, []);
 
-  const styles = createAppContentStyles(theme, insets);
+  const styles = createAppContentStyles(theme, insets, keyboardVisible);
 
   // ------- Auto-scroll + suivi clavier -------
   const scrollViewRef = useRef<ScrollView | null>(null);

@@ -1,6 +1,6 @@
 import { StyleSheet } from 'react-native';
 
-export const createAppContentStyles = (theme: any, insets: any) =>
+export const createAppContentStyles = (theme: any, insets: any, keyboardVisible: boolean) =>
   StyleSheet.create({
     sendButton: {
       padding: 8,
@@ -25,21 +25,12 @@ export const createAppContentStyles = (theme: any, insets: any) =>
     container: {
       flex: 1,
       paddingTop: insets.top,
-<<<<<<< HEAD
       paddingBottom: 0,
-=======
-      paddingBottom: keyboardVisible ? 0 : insets.bottom,
-      backgroundColor: theme.background,
-      justifyContent: 'space-between',
->>>>>>> feat/authentification
+
     },
     input: { 
       flex: 1, 
       backgroundColor: theme.card,
-<<<<<<< HEAD
-=======
-      maxHeight: 100,
->>>>>>> feat/authentification
     },
     inputContainer: {
       flexDirection: 'row',
